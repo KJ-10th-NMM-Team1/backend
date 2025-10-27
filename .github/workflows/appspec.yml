@@ -22,14 +22,14 @@ permissions: # 복사된 파일에 권한 부여
 hooks:
   # 배포 단계별로 실행할 스크립트
   ApplicationStop:
-    - location: scripts/stop_server.sh # 기존 서버 중지
+    - location: deploy/stop_server.sh # 기존 서버 중지
       timeout: 300
       runas: ubuntu
   BeforeInstall:
-    - location: scripts/install_dependencies.sh # 의존성 설치
+    - location: deploy/install_dependencies.sh # 의존성 설치
       timeout: 300
       runas: ubuntu
   ApplicationStart:
-    - location: scripts/start_server.sh # 새 서버 시작
+    - location: deploy/start_server.sh # 새 서버 시작
       timeout: 300
       runas: ubuntu
