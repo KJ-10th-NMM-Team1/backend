@@ -5,6 +5,7 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # 2. 그 상위 디렉토리 (압축이 풀린 루트, /opt/.../deployment-archive)
 ARCHIVE_ROOT=$( dirname "$SCRIPT_DIR" )
+
 echo "archive_root path: $ARCHIVE_ROOT"
 
 # 최종 venv가 설치될 위치
