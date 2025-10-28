@@ -1,31 +1,43 @@
 #!/bin/bash
 
-# appspec.yml의 'destination' 경로
-BASE_DIR="/home/ubuntu/app"
+# 이 스크립트는 '임시 폴더'에서 실행됩니다.
+# (appspec.yml, requirements.txt, main.py 등이 모두 여기에 있음)
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# 2. 그 상위 디렉토리 (압축이 풀린 루트, /opt/.../deployment-archive)
+ARCHIVE_ROOT=$( dirname "$SCRIPT_DIR" )
 
-# 실제 FastAPI 코드가 있는 경로 (dev 폴더)
-APP_DIR="$BASE_DIR/dev"
+echo "archive_root path: $ARCHIVE_ROOT"
 
-# 가상 환경(venv) 경로 (install_dependencies.sh에서 생성한 위치)
-VENV_PATH="$BASE_DIR/venv/bin/activate"
+# 최종 venv가 설치될 위치
+APP_DIR="/home/ubuntu/app"
+VENV_DIR="$APP_DIR/venv"
 
-# 1. (중요) 가상 환경 활성화
-#    venv는 'dev' 폴더 밖, 즉 'app' 폴더에 생성되어 있어야 합니다.
-echo "Activating virtual environment at $VENV_PATH..."
-if [ -f "$VENV_PATH" ]; then
-    source $VENV_PATH
+# 1. venv 생성 (경로를 /home/ubuntu/app/venv로 지정)
+echo "Creating venv at $VENV_DIR..."
+if [ -d "$VENV_DIR" ]; then
+    rm -rf "$VENV_DIR"
+fi
+# python3.9를 사용해 venv를 $VENV_DIR 경로에 생성
+python3.9 -m venv "$VENV_DIR"
+
+# 2. venv 활성화
+echo "Activating virtual environment..."
+source "$VENV_DIR/bin/activate"
+
+# 3. pip 업그레이드
+pip install --upgrade pip
+
+# 4. 'requirements.txt' 설치
+#    (dev 폴더가 아닌, 현재 스크립트와 같은 위치(루트)에서 찾음)
+REQ_FILE="$ARCHIVE_ROOT/requirements.txt"
+
+echo "Installing dependencies from $REQ_FILE..."
+if [ -f "$REQ_FILE" ]; then
+    pip install -r "$REQ_FILE"
 else
-    echo "ERROR: Virtual environment not found at $VENV_PATH"
-    exit 1 # 가상 환경이 없으면 배포 실패
+    # 이 에러가 뜨면 zip 파일에 requirements.txt가 빠진 것
+    echo "ERROR: requirements.txt not found in the root of the zip package."
+    exit 1
 fi
 
-# 2. (중요) 실제 코드(main.py)가 있는 'dev' 폴더로 이동
-echo "Changing directory to $APP_DIR..."
-cd $APP_DIR
-
-# 3. FastAPI 서버를 백그라운드로 실행
-#    (로그 파일은 상위 폴더인 $BASE_DIR에 저장하여 관리하기 쉽게 함)
-echo "Starting FastAPI server (uvicorn) from $APP_DIR..."
-nohup uvicorn main:app --host 0.0.0.0 --port 8000 > $BASE_DIR/server.log 2>&1 &
-
-echo "Server successfully started. Log file is at $BASE_DIR/server.log"
+echo "Dependency installation complete."
