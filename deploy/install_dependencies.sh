@@ -36,12 +36,12 @@ source venv/bin/activate
 
 # 5. 가상 환경 내 pip 업그레이드
 echo "Upgrading pip..."
-pip3 install --upgrade pip3
+pip install --upgrade pip3
 
 # 6. requirements.txt 파일에서 의존성 설치
 echo "Installing dependencies from requirements.txt..."
 if [ -f "requirements.txt" ]; then
-    pip3 install -r requirements.txt
+    pip install -r requirements.txt
 else
     echo "ERROR: requirements.txt file not found in $APP_DIR"
     # requirements.txt가 없으면 배포를 실패시킵니다.
