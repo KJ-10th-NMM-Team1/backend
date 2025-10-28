@@ -4,6 +4,13 @@
 
 # 1. 애플리케이션 디렉토리로 이동
 #    appspec.yml의 'destination' 경로와 일치해야 합니다.
+# sudo apt update
+# sudo add-apt-repository ppa:deadsnakes/ppa -y
+
+# sudo apt install python3
+# sudo apt install python3.9-venv
+
+
 APP_DIR="/home/ubuntu/app"
 cd $APP_DIR
 
@@ -29,7 +36,7 @@ source venv/bin/activate
 
 # 5. 가상 환경 내 pip 업그레이드
 echo "Upgrading pip..."
-pip install --upgrade pip3
+pip3 install --upgrade pip3
 
 # 6. requirements.txt 파일에서 의존성 설치
 echo "Installing dependencies from requirements.txt..."
