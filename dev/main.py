@@ -8,6 +8,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+
 # 2. CORS 미들웨어 설정 (React 앱의 요청을 허용)
 origins = [
     "http://localhost:5173", # React (Vite)
