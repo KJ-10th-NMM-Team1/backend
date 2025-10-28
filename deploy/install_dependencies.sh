@@ -21,7 +21,7 @@ if [ -d "venv" ]; then
     echo "Removing existing venv..."
     rm -rf venv
 fi
-python3.9.6 -m venv venv
+python3.9 -m venv venv
 
 # 4. 가상 환경 활성화
 echo "Activating virtual environment..."
