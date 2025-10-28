@@ -1,55 +1,44 @@
 #!/bin/bash
 
-# 이 스크립트는 appspec.yml의 BeforeInstall 훅에서 실행됩니다.
+# 이 스크립트는 '임시 폴더'에서 실행됩니다.
+# (appspec.yml, requirements.txt, main.py 등이 모두 여기에 있음)
 
-# 1. 애플리케이션 디렉토리로 이동
-#    appspec.yml의 'destination' 경로와 일치해야 합니다.
 # sudo apt update
 # sudo add-apt-repository ppa:deadsnakes/ppa -y
-
 # sudo apt install python3
 # sudo apt install python3.9-venv
 
 
+# 최종 venv가 설치될 위치
 APP_DIR="/home/ubuntu/app"
-cd $APP_DIR
+VENV_DIR="$APP_DIR/venv"
 
-echo "Current directory: $(pwd)"
-
-# 2. (필수 선행 작업)
-#    EC2 인스턴스에 python3와 venv 모듈이 설치되어 있어야 합니다.
-#    (예: sudo apt install python3-venv -y)
-
-
-# 3. Python 가상 환경(venv) 생성
-#    (배포 시마다 새로 생성하는 것이 가장 깔끔합니다)
-echo "Creating Python virtual environment..."
-if [ -d "venv" ]; then
-    echo "Removing existing venv..."
-    rm -rf venv
+# 1. venv 생성 (경로를 /home/ubuntu/app/venv로 지정)
+echo "Creating venv at $VENV_DIR..."
+if [ -d "$VENV_DIR" ]; then
+    rm -rf "$VENV_DIR"
 fi
-python3.9 -m venv venv
+# python3.9를 사용해 venv를 $VENV_DIR 경로에 생성
+python3.9 -m venv "$VENV_DIR"
 
-# 4. 가상 환경 활성화
+# 2. venv 활성화
 echo "Activating virtual environment..."
-source venv/bin/activate
+source "$VENV_DIR/bin/activate"
 
-# 5. 가상 환경 내 pip 업그레이드
-echo "Upgrading pip..."
-pip install --upgrade pip3
+# 3. pip 업그레이드
+pip install --upgrade pip
 
-# 6. requirements.txt 파일에서 의존성 설치
-echo "Installing dependencies from requirements.txt..."
-if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
+# 4. 'requirements.txt' 설치
+#    (dev 폴더가 아닌, 현재 스크립트와 같은 위치(루트)에서 찾음)
+REQ_FILE="requirements.txt"
+
+echo "Installing dependencies from $REQ_FILE..."
+if [ -f "$REQ_FILE" ]; then
+    pip install -r "$REQ_FILE"
 else
-    echo "ERROR: requirements.txt file not found in $APP_DIR"
-    # requirements.txt가 없으면 배포를 실패시킵니다.
+    # 이 에러가 뜨면 zip 파일에 requirements.txt가 빠진 것
+    echo "ERROR: requirements.txt not found in the root of the zip package."
     exit 1
 fi
 
 echo "Dependency installation complete."
-
-# 7. (선택) venv 비활성화
-#    스크립트가 종료되면 자동으로 비활성화되므로 꼭 필요하진 않습니다.
-# deactivate
