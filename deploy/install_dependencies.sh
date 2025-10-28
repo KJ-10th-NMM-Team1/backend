@@ -14,8 +14,6 @@ echo "Current directory: $(pwd)"
 #    (예: sudo apt install python3-venv -y)
 
 
-sudo apt install python3-venv -y
-
 # 3. Python 가상 환경(venv) 생성
 #    (배포 시마다 새로 생성하는 것이 가장 깔끔합니다)
 echo "Creating Python virtual environment..."
@@ -23,7 +21,7 @@ if [ -d "venv" ]; then
     echo "Removing existing venv..."
     rm -rf venv
 fi
-python3 -m venv venv
+python3.9.6 -m venv venv
 
 # 4. 가상 환경 활성화
 echo "Activating virtual environment..."
