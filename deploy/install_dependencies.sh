@@ -2,6 +2,9 @@
 
 # 이 스크립트는 '임시 폴더'에서 실행됩니다.
 # (appspec.yml, requirements.txt, main.py 등이 모두 여기에 있음)
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# 2. 그 상위 디렉토리 (압축이 풀린 루트, /opt/.../deployment-archive)
+ARCHIVE_ROOT=$( dirname "$SCRIPT_DIR" )
 
 # 최종 venv가 설치될 위치
 APP_DIR="/home/ubuntu/app"
