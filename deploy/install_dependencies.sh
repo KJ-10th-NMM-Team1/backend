@@ -3,13 +3,16 @@
 # 이 스크립트는 '임시 폴더'에서 실행됩니다.
 # (appspec.yml, requirements.txt, main.py 등이 모두 여기에 있음)
 
-echo "--- DEBUG INFO ---"
-echo "Current Working Directory: $(pwd)"
-echo "Listing files in CWD (deploy/):"
-ls -al
-echo "Listing files in Parent Directory (root/):"
-ls -al ../
-echo "--- END DEBUG INFO ---"
+echo "--- DEBUG ENV VARS ---"
+echo "DEPLOYMENT_ROOT is: $DEPLOYMENT_ROOT"
+echo "APPLICATION_NAME is: $APPLICATION_NAME"
+echo "DEPLOYMENT_GROUP_NAME is: $DEPLOYMENT_GROUP_NAME"
+echo "LIFECYCLE_EVENT is: $LIFECYCLE_EVENT"
+echo "--- END DEBUG ENV VARS ---"
+
+# 1. (수정) 환경 변수를 사용해 압축이 풀린 루트 폴더의 절대 경로를 정의
+# $DEPLOYMENT_ROOT는 CodeDeploy가 자동으로 설정해주는 변수입니다.
+ARCHIVE_ROOT="$DEPLOYMENT_ROOT/deployment-archive"
 
 # 최종 venv가 설치될 위치
 APP_DIR="/home/ubuntu/app"
@@ -32,7 +35,7 @@ pip install --upgrade pip
 
 # 4. 'requirements.txt' 설치
 #    (dev 폴더가 아닌, 현재 스크립트와 같은 위치(루트)에서 찾음)
-REQ_FILE="../requirements.txt"
+REQ_FILE="$ARCHIVE_ROOT/requirements.txt"
 
 echo "Installing dependencies from $REQ_FILE..."
 if [ -f "$REQ_FILE" ]; then
