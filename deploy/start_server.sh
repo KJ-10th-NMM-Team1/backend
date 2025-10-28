@@ -1,43 +1,27 @@
 #!/bin/bash
 
-# 이 스크립트는 '임시 폴더'에서 실행됩니다.
-# (appspec.yml, requirements.txt, main.py 등이 모두 여기에 있음)
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-# 2. 그 상위 디렉토리 (압축이 풀린 루트, /opt/.../deployment-archive)
-ARCHIVE_ROOT=$( dirname "$SCRIPT_DIR" )
-
-echo "archive_root path: $ARCHIVE_ROOT"
-
-# 최종 venv가 설치될 위치
+# 1. 최종 배포 디렉토리
 APP_DIR="/home/ubuntu/app"
-VENV_DIR="$APP_DIR/venv"
 
-# 1. venv 생성 (경로를 /home/ubuntu/app/venv로 지정)
-echo "Creating venv at $VENV_DIR..."
-if [ -d "$VENV_DIR" ]; then
-    rm -rf "$VENV_DIR"
-fi
-# python3.9를 사용해 venv를 $VENV_DIR 경로에 생성
-python3.9 -m venv "$VENV_DIR"
+# 2. 가상 환경(venv) 경로
+VENV_DIR="$APP_DIR/venv/bin/activate"
 
-# 2. venv 활성화
-echo "Activating virtual environment..."
-source "$VENV_DIR/bin/activate"
-
-# 3. pip 업그레이드
-pip install --upgrade pip
-
-# 4. 'requirements.txt' 설치
-#    (dev 폴더가 아닌, 현재 스크립트와 같은 위치(루트)에서 찾음)
-REQ_FILE="$ARCHIVE_ROOT/requirements.txt"
-
-echo "Installing dependencies from $REQ_FILE..."
-if [ -f "$REQ_FILE" ]; then
-    pip install -r "$REQ_FILE"
-else
-    # 이 에러가 뜨면 zip 파일에 requirements.txt가 빠진 것
-    echo "ERROR: requirements.txt not found in the root of the zip package."
+# 3. (중요) 가상 환경 활성화
+#    BeforeInstall 단계에서 생성한 venv를 활성화합니다.
+echo "Activating virtual environment at $VENV_DIR..."
+if [ ! -f "$VENV_DIR" ]; then
+    echo "ERROR: Virtual environment not found at $VENV_DIR"
     exit 1
 fi
+source "$VENV_DIR"
 
-echo "Dependency installation complete."
+# 4. 애플리케이션 코드가 있는 디렉토리로 이동
+#    (main.py 파일이 있는 곳)
+cd $APP_DIR
+
+# 5. FastAPI 서버를 백그라운드로 실행 (uvicorn)
+#    (이 명령어는 stop_server.sh의 pkill 명령어와 일치해야 합니다)
+echo "Starting FastAPI server (uvicorn) from $APP_DIR..."
+nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2> $APP_DIR/error.log &
+
+echo "Server successfully started. Log file is at $APP_DIR/server.log"
