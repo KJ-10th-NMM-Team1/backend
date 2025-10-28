@@ -3,11 +3,6 @@
 # 이 스크립트는 '임시 폴더'에서 실행됩니다.
 # (appspec.yml, requirements.txt, main.py 등이 모두 여기에 있음)
 
-# sudo apt update
-# sudo add-apt-repository ppa:deadsnakes/ppa -y
-# sudo apt install python3
-# sudo apt install python3.9-venv
-
 
 # 최종 venv가 설치될 위치
 APP_DIR="/home/ubuntu/app"
