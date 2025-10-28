@@ -1,13 +1,12 @@
-name: Deploy Python App via CodeDeploy
+name: deploy fastAPI
 
 on:
   workflow_run:
-    workflows: ["Python application"] # 이전 워크플로 이름
+    workflows: ["python code style check"] # 이전 워크플로 이름
     types:
       - completed
     branches:
       - main
-    pull_request:
 
 jobs:
   deploy-via-codedeploy:
