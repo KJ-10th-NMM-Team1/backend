@@ -13,6 +13,9 @@ echo "Current directory: $(pwd)"
 #    EC2 인스턴스에 python3와 venv 모듈이 설치되어 있어야 합니다.
 #    (예: sudo apt install python3-venv -y)
 
+
+sudo apt install python3-venv -y
+
 # 3. Python 가상 환경(venv) 생성
 #    (배포 시마다 새로 생성하는 것이 가장 깔끔합니다)
 echo "Creating Python virtual environment..."
@@ -28,12 +31,12 @@ source venv/bin/activate
 
 # 5. 가상 환경 내 pip 업그레이드
 echo "Upgrading pip..."
-pip install --upgrade pip
+pip install --upgrade pip3
 
 # 6. requirements.txt 파일에서 의존성 설치
 echo "Installing dependencies from requirements.txt..."
 if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
+    pip3 install -r requirements.txt
 else
     echo "ERROR: requirements.txt file not found in $APP_DIR"
     # requirements.txt가 없으면 배포를 실패시킵니다.
