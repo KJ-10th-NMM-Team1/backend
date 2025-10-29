@@ -9,6 +9,10 @@ async def read_root():
     # JSON 형태로 응답 반환
     return {"message": "Hello World"}
 
+@app.get("/hello")
+def test():
+    return {"test": "hello"}
+
 # /items/{item_id} 경로로 GET 요청 처리 (경로 파라미터)
 @app.get("/items/{item_id}")
 async def read_item(item_id: int, q: str | None = None):
@@ -17,3 +21,5 @@ async def read_item(item_id: int, q: str | None = None):
     if q:
         response.update({"q": q})
     return response
+
+
