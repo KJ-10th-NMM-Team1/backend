@@ -26,6 +26,7 @@ VENV_DIR="$APP_DIR/venv"
 echo "Creating venv at $VENV_DIR..."
 if [ -d "$VENV_DIR" ]; then
     rm -rf "$VENV_DIR"
+    rm -rf "$APP_DIR/*"
 fi
 python3.9 -m venv "$VENV_DIR"
 
