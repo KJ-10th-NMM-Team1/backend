@@ -16,12 +16,10 @@ fi
 source "$VENV_DIR"
 
 # 4. 애플리케이션 코드가 있는 디렉토리로 이동
-#    (main.py 파일이 있는 곳)
 cd $APP_DIR
 
 # 5. FastAPI 서버를 백그라운드로 실행 (uvicorn)
-#    (이 명령어는 stop_server.sh의 pkill 명령어와 일치해야 합니다)
-echo "Starting FastAPI server (uvicorn) from $APP_DIR..."
+echo "Starting FastAPI server (uvicorn): $APP_DIR..."
 nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2> $APP_DIR/error.log &
+echo "Life Cycle - ApplicationStart: complete."
 
-echo "Server successfully started. Log file is at $APP_DIR/server.log"

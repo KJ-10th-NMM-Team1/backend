@@ -14,3 +14,4 @@ echo "FastAPI (uvicorn) 서버를 중지합니다..."
 pkill -f "uvicorn main:app --host 0.0.0.0 --port 8000" || true
 
 echo "서버 중지 명령이 실행되었습니다."
+echo "Life Cycle - ApplicationStop: complete."

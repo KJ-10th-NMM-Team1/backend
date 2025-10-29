@@ -8,44 +8,36 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ARCHIVE_ROOT=$( dirname "$SCRIPT_DIR" )
 # ---
 
-# (디버깅)
-echo "--- NEW DEBUG INFO ---"
-echo "BASH_SOURCE[0] is: ${BASH_SOURCE[0]}"
-echo "SCRIPT_DIR is: $SCRIPT_DIR"
-echo "ARCHIVE_ROOT is: $ARCHIVE_ROOT"
-echo "Listing files in ARCHIVE_ROOT:"
-ls -al "$ARCHIVE_ROOT"
-echo "--- END DEBUG INFO ---"
-
-
 # 3. venv가 설치될 최종 목적지
 APP_DIR="/home/ubuntu/app"
 VENV_DIR="$APP_DIR/venv"
 
 # 4. venv 생성
-echo "Creating venv at $VENV_DIR..."
-if [ -d "$VENV_DIR" ]; then
+if [ -d "$APP_DIR" ]; then
+    echo "Removing existing APP directory: $APP_DIR"
     rm -rf "$VENV_DIR"
-    rm -rf "$APP_DIR/*"
+    rm -rf "$APP_DIR"
 fi
+echo "Create APP directory: $APP_DIR"
+mkdir -p $APP_DIR
+
+echo "Create APP venv: $VENV_DIR..."
 python3.9 -m venv "$VENV_DIR"
 
-# 5. venv 활성화
 echo "Activating virtual environment..."
 source "$VENV_DIR/bin/activate"
 
-# 6. pip 업그레이드
 pip install --upgrade pip
 
-# 7. (수정) 'ARCHIVE_ROOT'의 절대 경로에서 requirements.txt 찾기
 REQ_FILE="$ARCHIVE_ROOT/requirements.txt" 
 
 echo "Installing dependencies from $REQ_FILE..."
 if [ -f "$REQ_FILE" ]; then
+    echo "SEUCCESS: requirements.txt install"
     pip install -r "$REQ_FILE"
 else
     echo "ERROR: requirements.txt not found at $REQ_FILE"
     exit 1
 fi
 
-echo "Dependency installation complete."
+echo "Life Cycle - BeforeInstall: complete."
