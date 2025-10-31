@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-
 from fastapi.middleware.cors import CORSMiddleware
 from middleware.middleware import LoggingMiddleware
 from config.env_config import EnvConfig

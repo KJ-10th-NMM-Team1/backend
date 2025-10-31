@@ -21,6 +21,6 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY app .
 
 # 6) uvicorn 실행 (컨테이너 포트는 8000 가정)
-ENV APP_ENV=dev
-EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# ENV APP_ENV=dev
+# EXPOSE 8000
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

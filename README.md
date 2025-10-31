@@ -27,6 +27,8 @@ $ docker-compose down -v --rmi all # 볼륨, 네트워크 이미지 전부 삭�
 $ docker-compose up -d # 도커 설치 명령어
 ```
 
+> Dev Containers: Rebuild and Reopen in Container
+
 API 문서: http://localhost:8000/docs
 MongoDB: mongodb://localhost:27017
 중지 및 정리: docker compose down으로 컨테이너만 중지/삭제하며 데이터는 유지됩니다.

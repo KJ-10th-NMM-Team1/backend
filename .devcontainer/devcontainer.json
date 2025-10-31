@@ -1,0 +1,53 @@
+{
+	"name": "Python Backend (Dev Container)",
+
+	// 'build.dockerfile'을 사용하여 기존 Dockerfile로부터 빌드합니다.
+	"build": {
+		// 빌드 컨텍스트를 프로젝트 루트('.')로 설정합니다.
+		// (이 .devcontainer 폴더의 부모 폴더)
+		// ".."는 .devcontainer의 부모 폴더 (즉, 'backend' 폴더)를 의미합니다.
+		"context": "..",
+		
+		// Dockerfile의 경로를 빌드 컨텍스트('backend' 폴더) 기준으로 지정합니다.
+		// 'backend/Dockerfile'이 아니라 'Dockerfile'이 맞습니다.
+		"dockerfile": "Dockerfile"
+	},
+
+	// 컨테이너가 시작된 후 VSCode가 열어야 할 작업 폴더입니다.
+	// Dockerfile의 WORKDIR과 일치시킵니다.
+	"workspaceFolder": "/app",
+
+	// 애플리케이션이 사용할 포트를 로컬 머신으로 포워딩합니다.
+	// Dockerfile에서 주석 처리된 포트(8000)를 기반으로 합니다.
+	"forwardPorts": [8000],
+
+	// (선택 사항) VSCode 특정 설정 및 확장 프로그램을 지정합니다.
+	"customizations": {
+		"vscode": {
+			// 컨테이너 내에 설치할 추천 확장 프로그램
+			"extensions": [
+				"ms-python.python", // Python 지원
+				"ms-python.vscode-pylance", // Pylance (개선된 IntelliSense)
+				"ms-azuretools.vscode-docker" // Docker 관리 (선택 사항)
+			],
+			
+			// (선택 사항) 컨테이너 내 VSCode 설정
+			"settings": {
+				// Python 인터프리터 경로 (Dockerfile 기준)
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"python.linting.pylintEnabled": true,
+				"python.linting.enabled": true
+			}
+		}
+	},
+
+	// (선택 사항) Dockerfile에서 별도 사용자를 지정하지 않았으므로 'root'로 실행됩니다.
+	// 보안을 강화하려면 Dockerfile 내에서 'vscode'와 같은 비-root 사용자를 생성 및 지정하고,
+	// 여기서도 해당 사용자를 'remoteUser': 'vscode'와 같이 명시하는 것이 좋습니다.
+	"remoteUser": "root",
+
+	// Dockerfile의 CMD (현재 주석 처리됨)를 실행하는 대신,
+	// VSCode가 연결할 수 있도록 컨테이너를 계속 실행 상태로 둡니다. (이것이 기본 동작입니다)
+	"overrideCommand": true
+}
+
