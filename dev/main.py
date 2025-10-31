@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from middleware.middleware import LoggingMiddleware
 
 app = FastAPI(
     title="My API Gateway",
@@ -17,8 +18,10 @@ app.add_middleware(
     allow_origins=origins,       # 이 origin들의 요청을 허용
     allow_credentials=True,    # 인증 토큰(JWT) 등을 포함한 요청 허용
     allow_methods=["*"],       # 모든 HTTP 메서드 허용
-    allow_headers=["*"],       # 모든 HTTP 헤더 허용
+    allow_headers=["*"]       # 모든 HTTP 헤더 허용
 )
+
+app.add_middleware(LoggingMiddleware)
 
 # app.include_router(auth.router, prefix="/api")
 
