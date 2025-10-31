@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from middleware.middleware import LoggingMiddleware
+from config.env_config import EnvConfig
+
+config = EnvConfig()
 
 app = FastAPI(
     title="My API Gateway",
@@ -10,7 +13,7 @@ app = FastAPI(
 
 # 2. CORS 미들웨어 설정 (React 앱의 요청을 허용)
 origins = [
-    "http://localhost:5173", # React (Vite)
+    config.get_origins()
 ]
 
 app.add_middleware(
