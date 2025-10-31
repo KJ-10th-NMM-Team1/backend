@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 
 from fastapi.middleware.cors import CORSMiddleware
-from middleware.middleware import LoggingMiddleware
-from config.env_config import EnvConfig
-from config.db import DbDep
-from config.lifespan import lifespan
+from app.middleware.middleware import LoggingMiddleware
+from app.config.env_config import EnvConfig
+from app.api.deps import DbDep
+from app.config.lifespan import lifespan
+
+# from app.api.main import api_router
 
 config = EnvConfig()
 

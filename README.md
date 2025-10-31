@@ -4,9 +4,11 @@
 - PR 올릴시, 한명의 리뷰자를 선택할 것!
 
 # 가상환경
+
 - 가상환경은 .venv로 만들 것!
 
 # 폴더 구조
+
 middleware - 미들웨어 설정 파일 모음
 service - 비지니스로직 모음
 router - api 모음
@@ -16,6 +18,7 @@ config - 설정 파일 모음
 # Docker Guide
 
 ## .env파일
+
 ```env
 MONGO_URL_DEV=mongodb://root:example@mongo:27017/dupilot?authSource=admin
 APP_ENV="dev"

@@ -2,8 +2,7 @@ import os, json
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from dotenv import load_dotenv
 from typing import AsyncGenerator
-from typing import Annotated, AsyncGenerator
-from fastapi import Depends
+from typing import AsyncGenerator
 
 
 load_dotenv()
@@ -44,7 +43,3 @@ async def ensure_db_connection() -> None:
 
 async def get_db() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
     yield database
-
-
-DbDep = Annotated[AsyncIOMotorDatabase, Depends(get_db)]
-
