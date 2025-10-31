@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from config.db import ensure_db_connection
+from app.config.db import ensure_db_connection
 
 
 @asynccontextmanager

@@ -18,9 +18,9 @@ RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
 # 5) 애플리케이션 소스 복사
-COPY app .
+COPY app ./app
 
 # 6) uvicorn 실행 (컨테이너 포트는 8000 가정)
-ENV APP_ENV=dev
-EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# ENV APP_ENV=dev
+# EXPOSE 8000
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
