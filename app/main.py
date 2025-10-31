@@ -3,16 +3,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from middleware.middleware import LoggingMiddleware
 from config.env_config import EnvConfig
-from api.deps import DbDep
+from config.db import DbDep
 from config.lifespan import lifespan
 
 config = EnvConfig()
 
-
 app = FastAPI(
-    title="My API Gateway",
-    description="모든 API 요청의 중앙 진입점",
-    version="1.0.0",
+    title="Dupilot",
+    description="영상 더빙 API",
+    version="0.0.1",
     lifespan=lifespan,
 )
 
