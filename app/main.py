@@ -5,8 +5,7 @@ from app.middleware.middleware import LoggingMiddleware
 from app.config.env_config import EnvConfig
 from app.api.deps import DbDep
 from app.config.lifespan import lifespan
-
-# from app.api.main import api_router
+from app.api.main import api_router
 
 config = EnvConfig()
 
@@ -31,7 +30,7 @@ app.add_middleware(
 
 app.add_middleware(LoggingMiddleware)
 
-# app.include_router(auth.router, prefix="/api")
+app.include_router(api_router)
 
 
 # 4. 루트 엔드포인트 (서버 상태 확인용)
