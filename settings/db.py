@@ -1,6 +1,7 @@
 import os, json
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from dotenv import load_dotenv
+from typing import AsyncGenerator
 
 load_dotenv()
 
@@ -22,5 +23,21 @@ def make_db():
 
         uri = f"mongodb://{user}:{pwd}@{endpoint}:{port}/{dbname}?{params}"
         client = AsyncIOMotorClient(uri, tlsCAFile=ca, serverSelectionTimeoutMS=5000)
-
     return client[dbname]
+
+
+# global
+database = make_db()
+
+
+async def ensure_db_connection() -> None:
+    try:
+        await database.command("ping")
+        print("Mongo ping OK")
+    except Exception as exc:
+        print("Mongo ping failed:", exc)
+        raise
+
+
+async def get_db() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
+    yield database
