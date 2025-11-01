@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.config.s3 import s3
 from .models import PresignRequest, UploadFinalize
-from ..projects.modles import ProjectUpdate
+from ..projects.models import ProjectUpdate
 from ..deps import DbDep
 from app.api.projects.service import create_project, update_project
 

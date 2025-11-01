@@ -6,7 +6,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 
 from ..deps import DbDep
-from .modles import ProjectCreate, ProjectUpdate
+from .models import ProjectCreate, ProjectUpdate
 
 
 class ProjectCreateResult(TypedDict):
