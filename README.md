@@ -11,7 +11,12 @@ router - api 모음
 model - db와 연동될 객체 모음
 config - 설정 파일 모음
 
-# Docker Guide
+# Docker 기반 개발 환경
+- VS Code에서 저장소 루트(backend)를 열어 작업하세요.
+- 사전 준비: Dev Containers 확장이 설치된 VS Code가 필요합니다.
+- 컨테이너 실행: Ctrl + Shift + P → Dev Containers: Rebuild and Reopen in Container를 선택하세요.
+- 개발 서버 시작: 컨테이너 내부 터미널에서 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 를 실행합니다.
+- 서버 중지: 실행 중인 터미널에서 Ctrl + C를 누르면 종료됩니다.
 
 ## .env파일
 
@@ -32,4 +37,3 @@ MongoDB: mongodb://localhost:27017
 로그 확인/디버깅: docker compose logs -f api 또는 docker compose logs mongo
 프로덕션 모드 전환: .env 파일에서 APP_ENV=prod로 변경합니다.
 
-# uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
