@@ -6,6 +6,7 @@ from app.config.env_config import EnvConfig
 from app.api.deps import DbDep
 from app.config.lifespan import lifespan
 from app.api.main import api_router
+from app.api.project import project_router
 
 config = EnvConfig()
 
@@ -15,6 +16,8 @@ app = FastAPI(
     version="0.0.1",
     lifespan=lifespan,
 )
+
+app.include_router(project_router.router, prefix="/api")
 
 
 # 2. CORS 미들웨어 설정 (React 앱의 요청을 허용)
