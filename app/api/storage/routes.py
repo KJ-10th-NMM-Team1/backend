@@ -6,24 +6,29 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
 from app.config.s3 import s3
+from .models import PresignRequest
 
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
 
 
-@upload_router.post("/presigned")
-async def create_presigned_upload(filename: str, content_type: str):
+@upload_router.post(
+    "/presigned",
+)
+async def create_presigned_upload(payload: PresignRequest):
     bucket = os.getenv("AWS_S3_BUCKET")
     if not bucket:
         raise HTTPException(status_code=500, detail="AWS_S3_BUCKET env not set")
 
-    object_key = f"uploads/{datetime.now():%Y/%m/%d}/{uuid4()}_{filename}"
+    object_key = f"uploads/{datetime.now():%Y/%m/%d}/{uuid4()}_{payload.filename}"
 
     try:
         presigned = s3.generate_presigned_post(
             Bucket=bucket,
             Key=object_key,
-            Fields={"Content-Type": content_type},
-            Conditions=[["starts-with", "$Content-Type", content_type.split("/")[0]]],
+            Fields={"Content-Type": payload.content_type},
+            Conditions=[
+                ["starts-with", "$Content-Type", payload.content_type.split("/")[0]]
+            ],
             ExpiresIn=300,  # 5분
         )
     except Exception as exc:
