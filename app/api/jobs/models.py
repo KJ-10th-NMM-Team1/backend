@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
@@ -12,6 +12,7 @@ class JobCreate(BaseModel):
     project_id: str
     input_key: str
     callback_url: AnyHttpUrl
+    metadata: Optional[dict[str, Any]] = None
 
 
 class JobHistoryEntry(BaseModel):
@@ -28,6 +29,7 @@ class JobRead(BaseModel):
     callback_url: AnyHttpUrl
     result_key: Optional[str] = None
     error: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
     history: list[JobHistoryEntry] = Field(default_factory=list)
@@ -38,3 +40,4 @@ class JobUpdateStatus(BaseModel):
     result_key: str | None = None
     error: str | None = None
     message: str | None = None
+    metadata: dict[str, Any] | None = None

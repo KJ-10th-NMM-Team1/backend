@@ -47,6 +47,7 @@ def _serialize_job(doc: dict[str, Any]) -> JobRead:
             "callback_url": doc["callback_url"],
             "result_key": doc.get("result_key"),
             "error": doc.get("error"),
+            "metadata": doc.get("metadata"),
             "created_at": doc["created_at"],
             "updated_at": doc["updated_at"],
             "history": doc.get("history", []),
@@ -70,6 +71,7 @@ async def create_job(
         "status": "queued",
         "result_key": None,
         "error": None,
+        "metadata": payload.metadata or None,
         "created_at": now,
         "updated_at": now,
         "history": [
@@ -137,6 +139,9 @@ async def update_job_status(
 
     if payload.error is not None:
         update_operations["$set"]["error"] = payload.error
+
+    if payload.metadata is not None:
+        update_operations["$set"]["metadata"] = payload.metadata
 
     updated = await db[JOB_COLLECTION].find_one_and_update(
         {"_id": job_oid},
