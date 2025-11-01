@@ -5,6 +5,7 @@ from app.config.env_config import EnvConfig
 from app.api.deps import DbDep
 from app.config.lifespan import lifespan
 from app.api.main import api_router
+from app.api.project import project_router
 
 config = EnvConfig()
 
