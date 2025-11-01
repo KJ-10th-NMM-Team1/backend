@@ -1,4 +1,4 @@
-# backend/docker-compose.yml
+# docker-compose.yml (개발용)
 version: "3.9"
 
 services:
@@ -7,8 +7,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: dupilot-backend
+    volumes:
+      - .:/workspace
+    command: sleep infinity
+    privileged: true
     env_file:
       - .env
+    environment:
+      PYTHONPATH: .
     ports:
       - "8000:8000"
     depends_on:
@@ -26,5 +32,6 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
       MONGO_INITDB_DATABASE: dupilot
+
 volumes:
   mongo-data:

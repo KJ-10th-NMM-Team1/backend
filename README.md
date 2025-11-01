@@ -3,10 +3,6 @@
 - `main` 브랜치에 직접 푸시하지 않습니다.
 - PR 올릴시, 한명의 리뷰자를 선택할 것!
 
-# 가상환경
-
-- 가상환경은 .venv로 만들 것!
-
 # 폴더 구조
 
 middleware - 미들웨어 설정 파일 모음
@@ -35,3 +31,5 @@ MongoDB: mongodb://localhost:27017
 중지 및 정리: docker compose down으로 컨테이너만 중지/삭제하며 데이터는 유지됩니다.
 로그 확인/디버깅: docker compose logs -f api 또는 docker compose logs mongo
 프로덕션 모드 전환: .env 파일에서 APP_ENV=prod로 변경합니다.
+
+# uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
