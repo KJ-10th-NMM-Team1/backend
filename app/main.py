@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-
 from fastapi.middleware.cors import CORSMiddleware
 from app.middleware.middleware import LoggingMiddleware
 from app.config.env_config import EnvConfig
@@ -16,9 +15,6 @@ app = FastAPI(
     version="0.0.1",
     lifespan=lifespan,
 )
-
-app.include_router(project_router.router, prefix="/api")
-
 
 # 2. CORS 미들웨어 설정 (React 앱의 요청을 허용)
 origins = [config.get_origins()]
