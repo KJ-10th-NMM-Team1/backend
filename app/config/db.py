@@ -43,5 +43,3 @@ async def ensure_db_connection() -> None:
 
 async def get_db() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
     yield database
-
-
