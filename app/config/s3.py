@@ -3,5 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-session = boto3.Session(profile_name=os.getenv("AWS_PROFILE", "dev"))
-s3 = session.client("s3", region_name=os.getenv("AWS_REGION", "ap-northeast-2"))
+
+aws_profile = os.getenv("AWS_PROFILE")
+aws_region = os.getenv("AWS_REGION", "ap-northeast-2")
+
+session_kwargs = {}
+if aws_profile:
+    session_kwargs["profile_name"] = aws_profile
+
+session = boto3.Session(**session_kwargs, region_name=aws_region)
+s3 = session.client("s3")
