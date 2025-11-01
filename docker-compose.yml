@@ -14,6 +14,14 @@ services:
     depends_on:
       - mongo
     restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - AWS_PROFILE=dev                # ← 명시 추천 (s3.py가 기본 dev지만 헷갈림 방지)
+      - AWS_REGION=ap-northeast-2      # ← 지역 고정
+      - MONGO_URL_DEV=${MONGO_URL_DEV} 
+    volumes:
+      - ./app:/app/app
+      - "${USERPROFILE}\\.aws:/root/.aws:ro"
 
   mongo:
     image: mongo:7
