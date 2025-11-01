@@ -15,7 +15,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
 # 2. CORS 미들웨어 설정 (React 앱의 요청을 허용)
 origins = [config.get_origins()]
 
