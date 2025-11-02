@@ -1,13 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.middleware.middleware import LoggingMiddleware
-from app.config.env_config import EnvConfig
+from app.config.env_config import origins
 from app.api.deps import DbDep
 from app.config.lifespan import lifespan
 from app.api.main import api_router
 from app.api.project import router
-
-config = EnvConfig()
 
 app = FastAPI(
     title="Dupilot",
@@ -17,7 +15,7 @@ app = FastAPI(
 )
 
 # 2. CORS 미들웨어 설정 (React 앱의 요청을 허용)
-origins = [config.get_origins()]
+origins = [origins]
 
 app.add_middleware(
     CORSMiddleware,

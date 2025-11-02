@@ -20,9 +20,29 @@ config - 설정 파일 모음
 
 ## .env파일
 ```env
-MONGO_URL_DEV=mongodb://root:example@mongo:27018/dupilot?authSource=admin
+# CORS: 리액트 개발 서버 허용
+CORS_ORIGINS=http://localhost:5173
+# Mongo (compose상 서비스명 mongo 기준)
+MONGO_URL_DEV=mongodb://root:example@mongo:27017/dupilot?authSource=admin
+# MONGO_URL_DEV=mongodb://root:example@mongo:27017/dupilot?authSource=admin
+# 미리보기 샘플(원하면 나중에 S3 presigned로 교체)
+SAMPLE_VIDEO_URL=https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4
+SAMPLE_AUDIO_URL=https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3
 APP_ENV="dev"
 DB_NAME="dupilot"
+# (S3 붙일 때)
+AWS_S3_BUCKET="dupilot-dev-media"
+AWS_REGION=ap-northeast-2
+# Job pipeline (dev 기본값; 실서비스는 실제 호스트/큐 URL로 교체)
+JOB_CALLBACK_BASE_URL=http://host.docker.internal:8000
+JOB_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/148761638563/dupilot-queue.fifo
+JOB_QUEUE_FIFO=True
+JOB_TARGET_LANG=en
+JOB_SOURCE_LANG=ko
+JOB_RESULT_VIDEO_PREFIX=projects/{project_id}/outputs/videos/{job_id}.mp4
+JOB_RESULT_METADATA_PREFIX=projects/{project_id}/outputs/metadata/{job_id}.json
+JOB_QUEUE_WAIT=20
+JOB_VISIBILITY_TIMEOUT=300
 ```
 
 ```shell
