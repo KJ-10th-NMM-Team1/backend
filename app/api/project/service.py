@@ -6,7 +6,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 
 from ..deps import DbDep
-from .models import ProjectCreate, ProjectUpdate
+from ..project.models import ProjectCreate, ProjectUpdate, ProjectPublic
 
 
 class ProjectCreateResult(TypedDict):
@@ -17,8 +17,9 @@ async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResu
     now = datetime.now()
     doc = {
         "title": payload.filename,
+        "progress": 0,
         "status": "upload_ready",
-        "s3_key": None,
+        "video_source": None,
         "created_at": now,
         "updated_at": now,
     }
@@ -39,7 +40,7 @@ async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResu
     return {"project_id": str(result.inserted_id)}
 
 
-async def update_project(db: DbDep, payload: ProjectUpdate) -> ProjectCreateResult:
+async def update_project(db: DbDep, payload: ProjectUpdate) -> ProjectPublic:
     project_id = payload.project_id
     update_data = payload.model_dump(exclude={"project_id"}, exclude_none=True)
     update_data["updated_at"] = datetime.now()
@@ -49,6 +50,11 @@ async def update_project(db: DbDep, payload: ProjectUpdate) -> ProjectCreateResu
             {"_id": ObjectId(project_id)},
             {"$set": update_data},
         )
+        doc = await db["projects"].find_one({"_id": ObjectId(project_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        doc["project_id"] = str(doc.pop("_id"))
     except InvalidId as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -66,4 +72,4 @@ async def update_project(db: DbDep, payload: ProjectUpdate) -> ProjectCreateResu
             detail="Project not found",
         )
 
-    return {"project_id": project_id}
+    return ProjectPublic.model_validate(doc)

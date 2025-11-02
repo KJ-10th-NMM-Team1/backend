@@ -53,10 +53,10 @@ async def prepare_upload(payload: PresignRequest, db: DbDep):
 async def fin_upload(payload: UploadFinalize, db: DbDep):
     update_payload = ProjectUpdate(
         project_id=payload.project_id,
-        status="uploaded",
-        s3_key=payload.object_key,
+        status="upload_done",
+        video_source=payload.object_key,
     )
-    result = await update_project(db, update_payload)
+   result = await update_project(db, update_payload)
 
     callback_base = os.getenv("JOB_CALLBACK_BASE_URL")
     if not callback_base:
