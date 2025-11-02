@@ -98,11 +98,15 @@ async def get_job(db: AsyncIOMotorDatabase, job_id: str) -> JobRead:
     try:
         job_oid = ObjectId(job_id)
     except InvalidId as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid job_id") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid job_id"
+        ) from exc
 
     document = await db[JOB_COLLECTION].find_one({"_id": job_oid})
     if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
 
     return _serialize_job(document)
 
@@ -117,7 +121,9 @@ async def update_job_status(
     try:
         job_oid = ObjectId(job_id)
     except InvalidId as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid job_id") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid job_id"
+        ) from exc
 
     now = datetime.utcnow()
     update_operations: dict[str, Any] = {
@@ -150,7 +156,9 @@ async def update_job_status(
     )
 
     if not updated:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
 
     return _serialize_job(updated)
 
@@ -162,7 +170,9 @@ async def mark_job_failed(
     error: str,
     message: Optional[str] = None,
 ) -> JobRead:
-    payload = JobUpdateStatus(status="failed", error=error, result_key=None, message=message)
+    payload = JobUpdateStatus(
+        status="failed", error=error, result_key=None, message=message
+    )
     return await update_job_status(db, job_id, payload, message=message)
 
 
