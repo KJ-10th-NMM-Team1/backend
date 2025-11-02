@@ -56,7 +56,7 @@ async def fin_upload(payload: UploadFinalize, db: DbDep):
         status="upload_done",
         video_source=payload.object_key,
     )
-   result = await update_project(db, update_payload)
+    result = await update_project(db, update_payload)
 
     callback_base = os.getenv("JOB_CALLBACK_BASE_URL")
     if not callback_base:
