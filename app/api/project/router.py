@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 from app.api.deps import DbDep
 
-router = APIRouter(prefix="/projects", tags=["Projects"])
+project_router = APIRouter(prefix="/projects", tags=["Projects"])
 
  # MongoDB의 ObjectId·중첩 리스트/딕셔너리를 JSON 직렬화 가능한 값으로 변환
 def _serialize(value: Any) -> Any:
@@ -18,7 +18,7 @@ def _serialize(value: Any) -> Any:
         return {key: _serialize(item) for key, item in value.items()}
     return value
 
-@router.get("/", summary="프로젝트 목록 조회")
+@project_router.get("/", summary="프로젝트 목록 조회")
 async def list_projects(db: DbDep) -> List[Dict[str, Any]]:
     projects = await db["projects"].find().to_list(length=None)
     if projects is None:

@@ -10,6 +10,7 @@ services:
     volumes:
       - .:/workspace
       - ./app:/app/app
+      - ~/.aws:/root/.aws:ro    # host 프로파일을 컨테이너에 전달
     command: sleep infinity
     privileged: true
     env_file:
@@ -28,7 +29,7 @@ services:
     image: mongo:7
     container_name: dupilot-mongo
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo-data:/data/db
     environment:
