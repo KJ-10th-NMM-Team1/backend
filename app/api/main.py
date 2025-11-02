@@ -7,6 +7,7 @@ from .project.router import project_router
 from .segment.router import segment_router
 
 api_router = APIRouter(prefix="/api")
+
 api_router.include_router(upload_router)
 api_router.include_router(preview_router)
 api_router.include_router(project_router)
