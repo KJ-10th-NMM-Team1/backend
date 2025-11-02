@@ -19,6 +19,8 @@ from pymongo.errors import PyMongoError
 from app.config.s3 import session as aws_session  # reuse configured AWS session
 
 from .models import JobCreate, JobRead, JobUpdateStatus
+from ..project.models import ProjectPublic
+from app.api.deps import DbDep
 
 JOB_COLLECTION = "jobs"
 
@@ -220,3 +222,44 @@ async def enqueue_job(job: JobRead) -> None:
             logger.error("SQS publish failed in %s env: %s", APP_ENV, exc)
             return
         raise SqsPublishError("Failed to publish job message to SQS") from exc
+
+
+async def start_job(project: ProjectPublic, db: DbDep):
+    callback_base = os.getenv("JOB_CALLBACK_BASE_URL")
+    if not callback_base:
+        app_env = os.getenv("APP_ENV", "dev").lower()
+        if app_env in {"dev", "development", "local"}:
+            callback_base = "http://localhost:8000"
+        else:
+            raise HTTPException(
+                status_code=500, detail="JOB_CALLBACK_BASE_URL env not set"
+            )
+
+    job_oid = ObjectId()
+    callback_url = f"{callback_base.rstrip('/')}/api/jobs/{job_oid}/status"
+    job_payload = JobCreate(
+        project_id=project.project_id,
+        input_key=project.video_source,
+        callback_url=callback_url,
+    )
+    job = await create_job(db, job_payload, job_oid=job_oid)
+
+    try:
+        await enqueue_job(job)
+    except SqsPublishError as exc:
+        await mark_job_failed(
+            db,
+            job.job_id,
+            error="sqs_publish_failed",
+            message=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to enqueue job",
+        ) from exc
+
+    return {
+        "project_id": project.project_id,
+        "job_id": job.job_id,
+        "status": job.status,
+    }
