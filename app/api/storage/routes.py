@@ -1,15 +1,18 @@
 # app/api/routes/upload.py
 import os
-from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from bson import ObjectId
+from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import JSONResponse
 
-from app.config.s3 import s3
-from .models import PresignRequest, UploadFinalize
-from ..projects.models import ProjectUpdate
-from ..deps import DbDep
+from app.api.jobs.models import JobCreate
+from app.api.jobs.service import SqsPublishError, create_job, enqueue_job, mark_job_failed
 from app.api.projects.service import create_project, update_project
+from app.config.s3 import s3
+from ..deps import DbDep
+from ..projects.models import ProjectUpdate
+from .models import PresignRequest, UploadFinalize
 
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
 
@@ -46,18 +49,54 @@ async def prepare_upload(payload: PresignRequest, db: DbDep):
     }
 
 
-@upload_router.post("/finish-upload")
+@upload_router.post("/finish-upload", status_code=status.HTTP_202_ACCEPTED)
 async def fin_upload(payload: UploadFinalize, db: DbDep):
     update_payload = ProjectUpdate(
         project_id=payload.project_id,
-        status="uploaded",
-        s3_key=payload.object_key,
+        status="upload_done",
+        video_source=payload.object_key,
     )
     result = await update_project(db, update_payload)
-    return {
-        "project_id": result["project_id"],
-        "status": "uploaded",
-    }
+
+    callback_base = os.getenv("JOB_CALLBACK_BASE_URL")
+    if not callback_base:
+        app_env = os.getenv("APP_ENV", "dev").lower()
+        if app_env in {"dev", "development", "local"}:
+            callback_base = "http://localhost:8000"
+        else:
+            raise HTTPException(status_code=500, detail="JOB_CALLBACK_BASE_URL env not set")
+
+    job_oid = ObjectId()
+    callback_url = f"{callback_base.rstrip('/')}/api/jobs/{job_oid}/status"
+    job_payload = JobCreate(
+        project_id=result["project_id"],
+        input_key=payload.object_key,
+        callback_url=callback_url,
+    )
+    job = await create_job(db, job_payload, job_oid=job_oid)
+
+    try:
+        await enqueue_job(job)
+    except SqsPublishError as exc:
+        await mark_job_failed(
+            db,
+            job.job_id,
+            error="sqs_publish_failed",
+            message=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to enqueue job",
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={
+            "project_id": result["project_id"],
+            "job_id": job.job_id,
+            "status": job.status,
+        },
+    )
 
 
 # @upload_router.post("/fail-upload")

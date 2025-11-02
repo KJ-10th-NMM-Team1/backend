@@ -10,6 +10,8 @@ services:
     volumes:
       - .:/workspace
       - ./app:/app/app
+      - ~/.aws:/root/.aws:ro    # host 프로파일을 컨테이너에 전달
+
     command: sleep infinity
     privileged: true
     env_file:
@@ -21,14 +23,14 @@ services:
     restart: unless-stopped
     environment:
       PYTHONPATH: .
-      AWS_PROFILE: dev                # ← 명시 추천 (s3.py가 기본 dev지만 헷갈림 방지)
-      AWS_REGION: ap-northeast-2      # ← 지역 고정
-      MONGO_URL_DEV: ${MONGO_URL_DEV} 
+      AWS_PROFILE: dev # ← 명시 추천 (s3.py가 기본 dev지만 헷갈림 방지)
+      AWS_REGION: ap-northeast-2 # ← 지역 고정
+      MONGO_URL_DEV: ${MONGO_URL_DEV}
   mongo:
     image: mongo:7
     container_name: dupilot-mongo
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo-data:/data/db
     environment:
