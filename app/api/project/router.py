@@ -1,14 +1,15 @@
-
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, status
- # FastAPI 응답 타입 힌트를 위해 제네릭 타입 불러옴
+
+# FastAPI 응답 타입 힌트를 위해 제네릭 타입 불러옴
 from typing import Any, Dict, List
 
 from app.api.deps import DbDep
 
 project_router = APIRouter(prefix="/projects", tags=["Projects"])
 
- # MongoDB의 ObjectId·중첩 리스트/딕셔너리를 JSON 직렬화 가능한 값으로 변환
+
+# MongoDB의 ObjectId·중첩 리스트/딕셔너리를 JSON 직렬화 가능한 값으로 변환
 def _serialize(value: Any) -> Any:
     if isinstance(value, ObjectId):
         return str(value)
@@ -17,6 +18,7 @@ def _serialize(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _serialize(item) for key, item in value.items()}
     return value
+
 
 @project_router.get("/", summary="프로젝트 목록 조회")
 async def list_projects(db: DbDep) -> List[Dict[str, Any]]:
