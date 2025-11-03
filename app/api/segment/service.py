@@ -18,10 +18,12 @@ class SegmentService:
 
         for project_doc in project_docs:
             project_id = project_doc['_id']
-            editor_id = project_doc['editor_id']
-            for segment_data in project_doc['segments']:
+            editor_id = project_doc.get('editor_id')
+            segments = project_doc.get('segments') or []
+            for segment_data in segments:
+                segment_data = dict(segment_data)
                 segment_data['_id'] = project_id
-                segment_data['editor_id'] = editor_id
+                segment_data.setdefault('editor_id', editor_id)
                 all_segments.append(ResponseSegment(**segment_data))
 
         return all_segments
