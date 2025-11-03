@@ -10,9 +10,10 @@ services:
     volumes:
       - .:/workspace
       - ./app:/app/app
-      - ~/.aws:/root/.aws:ro    # host 프로파일을 컨테이너에 전달
+      - ~/.aws:/root/.aws:ro # host 프로파일을 컨테이너에 전달
 
     command: sleep infinity
+    # command: bash -lc "python script/ingest.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     privileged: true
     env_file:
       - .env
