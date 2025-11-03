@@ -8,6 +8,8 @@ from typing import Any, List
 from fastapi import HTTPException, status
 import faiss
 from sentence_transformers import SentenceTransformer
+from bson import ObjectId
+from bson.errors import InvalidId
 
 from ..deps import DbDep
 
@@ -140,6 +142,18 @@ def detect_glossary_issues(source: str, mt: str, top_k: int = 5):
                     break
 
     return {"issues": issues, "suggestion": suggestion, "hits": hits}
+
+
+async def suggestion_by_project(db, project_id: str):
+    # 1) 프로젝트의 세그먼트 찾기
+    try:
+        project_oid = ObjectId(project_id)
+    except InvalidId:
+        project_oid = project_id  # 이미 문자열로 저장된 경우 그대로 사용
+
+    cursor = db["segments"].find({"project_id": project_oid})
+    async for segment in cursor:
+        await glosary_suggestion(db, segment["_id"])
 
 
 async def glosary_suggestion(db: DbDep, segment_oid: str):

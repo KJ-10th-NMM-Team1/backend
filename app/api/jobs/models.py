@@ -35,9 +35,20 @@ class JobRead(BaseModel):
     history: list[JobHistoryEntry] = Field(default_factory=list)
 
 
+class JobUpdateMetadata(BaseModel):
+    stage: Literal["downloaded", "stt_completed", "tts_prepare", "completed"]
+    segments_count: int
+    metadata_key: str
+    result_key: str
+    target_lang: str
+    source_lang: str
+    input_key: str
+    segment_assets_prefix: str
+
+
 class JobUpdateStatus(BaseModel):
     status: Literal["in_progress", "done", "failed"]
     result_key: str | None = None
     error: str | None = None
     message: str | None = None
-    metadata: dict[str, Any] | None = None
+    metadata: JobUpdateMetadata | None = None

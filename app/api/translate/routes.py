@@ -14,8 +14,9 @@ trans_router = APIRouter(prefix="/trans", tags=["translate"])
 async def test_set_seg(db: DbDep):
     await db["segments"].insert_one(
         {
-            "segment_text": "첫 번째 원문 텍스트입니다.",
-            "translate_text": "This is the first original text.",
+            "project_id": ObjectId("69083650141e52c49d637523"),
+            "segment_text": "The new graphics card launch was insane, no way! Oh my gosh, Rosie, your album finally dropped on Jimmy Fallon's show",
+            "translate_text": "새 지피유 는 미쳤어, 길이없다! 오 마이 갓, 로지 너의 앨범이 드디어 지미펠런의 쇼에 떨어졌어",
         }
     )
 
