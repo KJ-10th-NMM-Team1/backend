@@ -7,12 +7,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: dupilot-backend
+    working_dir: /workspace
     volumes:
       - .:/workspace
       - ./app:/app/app
-      - ~/.aws:/root/.aws:ro    # host 프로파일을 컨테이너에 전달
+      - ~/.aws:/root/.aws:ro # host 프로파일을 컨테이너에 전달
 
     command: sleep infinity
+    # command: bash -lc "python script/ingest.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     privileged: true
     env_file:
       - .env
@@ -22,10 +24,12 @@ services:
       - mongo
     restart: unless-stopped
     environment:
-      PYTHONPATH: .
+      PYTHONPATH: /workspace
       AWS_PROFILE: dev # ← 명시 추천 (s3.py가 기본 dev지만 헷갈림 방지)
       AWS_REGION: ap-northeast-2 # ← 지역 고정
       MONGO_URL_DEV: ${MONGO_URL_DEV}
+      UVICORN_HOST: 0.0.0.0
+      UVICORN_PORT: 8000      
   mongo:
     image: mongo:7
     container_name: dupilot-mongo
