@@ -33,15 +33,12 @@ class ResponseSegment(BaseModel):
     sub_langth: float
     start_point: float
     end_point: float
-<<<<<<< HEAD
-=======
     assets: Dict[str, Any] | None = None
     source_key: str | None = None
     bgm_key: str | None = None
     tts_key: str | None = None
     mix_key: str | None = None
     video_key: str | None = None
->>>>>>> 7e3821029e2fdaf0d0286f0846baf1a7e69a3f64
 
     # DetectingIssue 모델의 리스트를 임베딩
     # issues: List[DetectingIssue] = Field(default_factory=list)
