@@ -7,6 +7,7 @@ from .project.router import project_router
 from .segment.router import segment_router
 from .pipeline.router import pipeline_router
 from .auth.router import auth_router
+from .voice.router import voice_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -18,3 +19,4 @@ api_router.include_router(segment_router)
 api_router.include_router(job_router)
 api_router.include_router(pipeline_router)
 api_router.include_router(auth_router)
+api_router.include_router(voice_router)
