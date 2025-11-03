@@ -1,30 +1,23 @@
 from pydantic import BaseModel
-from typing import Optional, Literal, Dict
+from typing import Literal, Optional
 
 
 PreviewStatus = Literal["pending", "processing", "completed", "failed"]
 
+
 class PreviewCreateBody(BaseModel):
     text: str
-    project_id: str
-    lang_code: str
-    segment_id: str
+    project_id: Optional[str] = None
+    lang_code: Optional[str] = None
+    segment_id: Optional[str] = None
 
-class PreviewRecord(BaseModel):
-    id: str
-    project_id: str
-    language_code: str
-    segment_id: str
-    status: PreviewStatus
-    video_url: Optional[str] = None
-    audio_url: Optional[str] = None
-    updated_at: str
 
 class PreviewGetResponse(BaseModel):
     status: PreviewStatus
     videoUrl: Optional[str] = None
     audioUrl: Optional[str] = None
     updatedAt: Optional[str] = None
+
 
 class PreviewCreateResponse(BaseModel):
     previewId: Optional[str] = None

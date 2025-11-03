@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Annotated
+from typing import Any, Dict, List, Annotated
 from pydantic import BaseModel, Field, BeforeValidator
 from bson import ObjectId
 
@@ -33,6 +33,12 @@ class ResponseSegment(BaseModel):
     sub_langth: float
     start_point: float
     end_point: float
+    assets: Dict[str, Any] | None = None
+    source_key: str | None = None
+    bgm_key: str | None = None
+    tts_key: str | None = None
+    mix_key: str | None = None
+    video_key: str | None = None
 
     # DetectingIssue 모델의 리스트를 임베딩
     # issues: List[DetectingIssue] = Field(default_factory=list)
@@ -41,6 +47,7 @@ class ResponseSegment(BaseModel):
         allow_population_by_field_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
+        extra = "allow"
 
 
 class RequestSegment(BaseModel):
