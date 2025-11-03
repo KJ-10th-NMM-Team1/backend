@@ -12,10 +12,10 @@ class SegmentService:
             "editor_id": 1,
         }
 
-    async def find_all_segment(self):
-        project_docs = await self.collection.find({}, self.projection).to_list(
-            length=None
-        )
+    async def find_all_segment(self, project_id: str):
+        project_docs = await self.collection.find(
+            {"_id": project_id}, self.projection
+        ).to_list(length=None)
 
         all_segments: List[ResponseSegment] = []
 
