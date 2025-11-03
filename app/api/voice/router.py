@@ -9,10 +9,38 @@ voice_router = APIRouter(prefix="/voice", tags=["Voice"])
 
 # 보이스 프리셋 목록 (실제로는 Worker에서 가져와야 하지만 일단 하드코딩)
 VOICE_PRESETS_DATA = [
-    {"id": "preset_female_friendly", "name": "지민", "gender": "female", "age": "20대", "style": "친근한", "language": "한국어"},
-    {"id": "preset_male_professional", "name": "준호", "gender": "male", "age": "30대", "style": "전문적", "language": "한국어"},
-    {"id": "preset_female_news", "name": "서연", "gender": "female", "age": "30대", "style": "뉴스 앵커", "language": "한국어"},
-    {"id": "preset_male_calm", "name": "민수", "gender": "male", "age": "40대", "style": "차분한", "language": "한국어"},
+    {
+        "id": "preset_female_friendly",
+        "name": "지민",
+        "gender": "female",
+        "age": "20대",
+        "style": "친근한",
+        "language": "한국어",
+    },
+    {
+        "id": "preset_male_professional",
+        "name": "준호",
+        "gender": "male",
+        "age": "30대",
+        "style": "전문적",
+        "language": "한국어",
+    },
+    {
+        "id": "preset_female_news",
+        "name": "서연",
+        "gender": "female",
+        "age": "30대",
+        "style": "뉴스 앵커",
+        "language": "한국어",
+    },
+    {
+        "id": "preset_male_calm",
+        "name": "민수",
+        "gender": "male",
+        "age": "40대",
+        "style": "차분한",
+        "language": "한국어",
+    },
 ]
 
 

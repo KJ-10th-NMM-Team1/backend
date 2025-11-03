@@ -41,7 +41,9 @@ async def update_voice_config(
         ) from exc
 
     try:
-        voice_config_dict = {k: v.dict() if hasattr(v, 'dict') else v for k, v in voice_config.items()}
+        voice_config_dict = {
+            k: v.dict() if hasattr(v, "dict") else v for k, v in voice_config.items()
+        }
         result = await db["projects"].update_one(
             {"_id": project_oid},
             {"$set": {"voice_config": voice_config_dict, "updated_at": datetime.now()}},
