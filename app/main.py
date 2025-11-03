@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.middleware.middleware import LoggingMiddleware
-from app.config.env import origins
+from app.config.env import origins as allowed_origins
 from app.api.deps import DbDep
 from app.config.lifespan import lifespan
 from app.api.main import api_router
@@ -14,12 +14,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 2. CORS 미들웨어 설정 (React 앱의 요청을 허용)
-origins = [origins]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # 이 origin들의 요청을 허용
+    allow_origins=allowed_origins,  # 이 origin들의 요청을 허용
     allow_credentials=True,  # 인증 토큰(JWT) 등을 포함한 요청 허용
     allow_methods=["*"],  # 모든 HTTP 메서드 허용
     allow_headers=["*"],  # 모든 HTTP 헤더 허용

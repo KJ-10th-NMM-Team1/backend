@@ -26,3 +26,10 @@ async def segment_history(
         return await history_service.insert_one_history(request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@segment_router.patch("/{project_id}/save")
+async def save_segment(
+    request: RequestSegment, service: SegmentService = Depends(SegmentService)
+):
+    return await service.update_segment(request)

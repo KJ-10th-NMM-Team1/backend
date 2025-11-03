@@ -10,6 +10,8 @@ from app.api.project.service import create_project, update_project
 from app.config.s3 import s3
 from ..deps import DbDep
 from ..project.models import ProjectUpdate
+from ..pipeline.service import update_pipeline_stage
+from ..pipeline.models import PipelineUpdate, PipelineStatus
 from .models import PresignRequest, UploadFinalize
 
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
@@ -56,6 +58,17 @@ async def fin_upload(payload: UploadFinalize, db: DbDep):
     )
 
     result = await update_project(db, update_payload)
+
+    await update_pipeline_stage(
+        db,
+        PipelineUpdate(
+            project_id=payload.project_id,
+            stage_id="upload",
+            status=PipelineStatus.COMPLETED,
+            progress=100,
+        ),
+    )
+
     await start_job(result, db)
 
     return result
