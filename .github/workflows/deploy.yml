@@ -12,7 +12,7 @@ jobs:
   deploy-via-codedeploy:
     name: Deploy to EC2 via CodeDeploy
     runs-on: ubuntu-latest
-    
+
     # 'Python application' 워크플로가 '성공'했을 때만 배포 실행
     if: github.event.workflow_run.conclusion == 'success'
 
@@ -25,7 +25,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.12"
 
       # 3. 소스 코드를 zip 파일로 압축 (appspec.yml 포함)
       - name: Create deployment package
