@@ -4,18 +4,21 @@ from datetime import timedelta
 from .model import UserCreate, User, UserOut
 from typing import Dict, Any
 from .service import AuthService
+from ...config.env import ACCESS_TOKEN_EXPIRE_MINUTES
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.put("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@auth_router.put(
+    "/register", response_model=UserOut, status_code=status.HTTP_201_CREATED
+)
 async def register(
     user_data: UserCreate, auth_service: AuthService = Depends(AuthService)
 ) -> UserOut:
     return await auth_service.create_user(user_data)
 
 
-@router.post("/login", response_model=Dict[str, Any])
+@auth_router.post("/login", response_model=Dict[str, Any])
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     auth_service: AuthService = Depends(AuthService),

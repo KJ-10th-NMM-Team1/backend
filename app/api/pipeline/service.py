@@ -4,7 +4,6 @@ from pymongo.errors import PyMongoError
 from typing import TypedDict, Dict, Any
 from bson import ObjectId
 from bson.errors import InvalidId
-
 from ..deps import DbDep
 from .models import PipelineUpdate, ProjectPipeline, PipelineStage, PipelineStatus
 

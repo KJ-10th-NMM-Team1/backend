@@ -28,7 +28,7 @@ async def segment_history(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@segment_router.fetch("/{project_id}/save")
+@segment_router.patch("/{project_id}/save")
 async def save_segment(
     request: RequestSegment, service: SegmentService = Depends(SegmentService)
 ):
