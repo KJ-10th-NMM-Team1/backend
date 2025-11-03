@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -8,7 +8,7 @@ from ...config.env import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from ..deps import DbDep
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-from .model import User, UserCreate, UserOut
+from .model import User, UserCreate, UserOut, TokenData
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -109,3 +109,59 @@ async def get_current_user(db: DbDep, token: str = Depends(oauth2_scheme)) -> Us
 
     # 4. (선택적) Pydantic 모델로 변환하여 반환
     return User(**user)
+
+
+async def get_current_user_from_cookie(
+    request: Request,  # 👈 [1] Request 객체를 주입받아 쿠키를 읽음
+    auth_service: AuthService = Depends(
+        AuthService
+    ),  # 👈 [2] DB 조회를 위해 AuthService 주입
+) -> UserOut:
+
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated (no token in cookie)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # [4] 쿠키 값은 "Bearer <token>" 형식이므로 분리합니다.
+    try:
+        scheme, token_value = token.split()
+        if scheme.lower() != "bearer":
+            raise ValueError
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token scheme (cookie)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials (cookie)",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        # [5] JWT 토큰을 디코딩합니다.
+        payload = jwt.decode(token_value, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+
+        token_data = TokenData(sub=email)
+
+    except JWTError:
+        raise credentials_exception
+
+    # [6] 토큰이 유효하면, DB에서 실제 사용자를 조회합니다.
+    user = await auth_service.get_user_by_email(email=token_data.sub)
+
+    if user is None:
+        # 토큰은 유효하지만 해당 사용자가 DB에 없을 경우
+        raise credentials_exception
+
+    # [7] Pydantic 모델(UserOut)로 변환하여 반환
+    return UserOut(**user)
