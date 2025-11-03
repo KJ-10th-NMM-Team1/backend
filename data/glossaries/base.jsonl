@@ -1,5 +1,5 @@
 {"term":"LOL","preferred":"웃기다","forbidden":["크게 웃음","로올"],"aliases":["lol","lmao","ㅋㅋ"],"notes":"인터넷 은어. 과도한 의역 금지.","examples":["lol that's wild","lmao no way"],"domain":"slang"}
-{"term":"GPU","preferred":"그래픽 카드","forbidden":[],"aliases":["graphics card"],"notes":"약어 유지 + 괄호 해설 1회만.","examples":["GPU acceleration"],"domain":"tech"}
+{"term":"GPU","preferred":"그래픽 카드","forbidden":["지피유"],"aliases":["graphics card"],"notes":"약어 유지 + 괄호 해설 1회만.","examples":["GPU acceleration"],"domain":"tech"}
 {"term":"oh my gosh","preferred":"세상에","forbidden":["오 마이 갓"],"aliases":["oh my gosh","oh my god"],"notes":"발화체 톤 유지, 한글 감탄사","examples":["oh my gosh that's crazy"],"domain":"slang"}
 {"term":"Rosé","preferred":"로제","forbidden":["로지"],"aliases":["rosé","rose","rosie"],"notes":"아티스트 이름, 일관되게 로제 사용","examples":["Do I call you Rosé or Rosie?"],"domain":"entertainment"}
 {"term":"Jimmy Fallon","preferred":"지미 팰런","forbidden":["지미 펠런"],"aliases":["jimmy fallon"],"notes":"방송 진행자 이름 표기 고정","examples":["guest on the show with Jimmy Fallon"],"domain":"entertainment"}
