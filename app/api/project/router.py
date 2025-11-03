@@ -1,10 +1,7 @@
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, HTTPException, status
-
-# FastAPI 응답 타입 힌트를 위해 제네릭 타입 불러옴
 from typing import Any, Dict, List
-
 from app.api.deps import DbDep
 
 project_router = APIRouter(prefix="/projects", tags=["Projects"])
