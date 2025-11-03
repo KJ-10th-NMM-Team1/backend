@@ -1,6 +1,10 @@
+from fastapi import HTTPException
+from bson import ObjectId
+from bson.errors import InvalidId
+from typing import Any, Dict, List, Optional, Tuple
+
 from ..deps import DbDep
 from .model import ResponseSegment, RequestSegment
-from typing import List
 
 
 class SegmentService:
@@ -10,12 +14,19 @@ class SegmentService:
         self.projection = {
             "segments": 1,
             "editor_id": 1,
+            "segment_assets_prefix": 1,
+            "target_lang": 1,
+            "source_lang": 1,
+            "video_source": 1,
         }
 
-    async def find_all_segment(self):
-        project_docs = await self.collection.find({}, self.projection).to_list(
-            length=None
-        )
+    async def find_all_segment(self, project_id: Optional[str] = None):
+        query: Dict[str, Any] = {}
+        if project_id:
+            object_id = self._as_object_id(project_id)
+            query["_id"] = object_id
+
+        project_docs = await self.collection.find(query, self.projection).to_list(length=None)
 
         all_segments: List[ResponseSegment] = []
 
@@ -37,3 +48,45 @@ class SegmentService:
             {"$set": {"translate_context": request.translate_context}},
         )
         return result
+
+    def _as_object_id(self, project_id: str) -> ObjectId:
+        try:
+            return ObjectId(project_id)
+        except InvalidId as exc:
+            raise HTTPException(status_code=400, detail="invalid project_id") from exc
+
+    async def _load_project(self, project_id: str) -> Tuple[Dict[str, Any], ObjectId]:
+        object_id = self._as_object_id(project_id)
+        project = await self.collection.find_one({"_id": object_id}, self.projection)
+        if not project:
+            raise HTTPException(status_code=404, detail="project not found")
+        return project, object_id
+
+    async def get_project_segment(
+        self, project_id: str, segment_id: str
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], int, ObjectId]:
+        project, object_id = await self._load_project(project_id)
+        segments = project.get("segments") or []
+        for index, segment in enumerate(segments):
+            if str(segment.get("segment_id")) == str(segment_id):
+                return project, dict(segment), index, object_id
+        raise HTTPException(status_code=404, detail="segment not found")
+
+    async def set_segment_translation(
+        self,
+        project_object_id: ObjectId,
+        segment_index: int,
+        text: str,
+        *,
+        editor_id: Optional[str] = None,
+    ) -> None:
+        set_fields: Dict[str, Any] = {
+            f"segments.{segment_index}.translate_context": text,
+        }
+        if editor_id:
+            set_fields[f"segments.{segment_index}.editor_id"] = editor_id
+
+        await self.collection.update_one(
+            {"_id": project_object_id},
+            {"$set": set_fields},
+        )
