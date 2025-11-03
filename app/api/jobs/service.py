@@ -57,6 +57,50 @@ def _serialize_job(doc: dict[str, Any]) -> JobRead:
     )
 
 
+def _normalize_segment_record(segment: dict[str, Any], *, index: int) -> dict[str, Any]:
+    """
+    Ensure segment documents stored in MongoDB follow the schema expected by /api/segment.
+    """
+
+    def _float_or_none(value: Any) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    issues = segment.get("issues") or []
+    if not isinstance(issues, list):
+        issues = [issues]
+
+    assets = segment.get("assets")
+    if not isinstance(assets, dict):
+        assets = None
+
+    normalized = {
+        "segment_id": str(segment.get("segment_id", index)),
+        "segment_text": segment.get("segment_text", ""),
+        "score": segment.get("score"),
+        "editor_id": segment.get("editor_id"),
+        "translate_context": segment.get("translate_context", ""),
+        "sub_langth": _float_or_none(segment.get("sub_langth")),
+        "start_point": _float_or_none(segment.get("start_point")) or 0.0,
+        "end_point": _float_or_none(segment.get("end_point")) or 0.0,
+        "issues": issues,
+    }
+
+    if assets:
+        normalized["assets"] = assets
+
+    for key in ("source_key", "bgm_key", "tts_key", "mix_key", "video_key"):
+        value = segment.get(key)
+        if not value and assets:
+            value = assets.get(key)
+        if value:
+            normalized[key] = str(value)
+
+    return normalized
+
+
 async def create_job(
     db: AsyncIOMotorDatabase,
     payload: JobCreate,
@@ -161,6 +205,62 @@ async def update_job_status(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
+
+    project_updates: dict[str, Any] = {}
+    metadata = payload.metadata if isinstance(payload.metadata, dict) else None
+    if metadata:
+        segments_meta = metadata.get("segments")
+        if isinstance(segments_meta, list):
+            normalized_segments = [
+                _normalize_segment_record(
+                    seg if isinstance(seg, dict) else {}, index=i
+                )
+                for i, seg in enumerate(segments_meta)
+            ]
+            project_updates["segments"] = normalized_segments
+            project_updates["segments_updated_at"] = now
+
+        assets_prefix = metadata.get("segment_assets_prefix")
+        if assets_prefix:
+            project_updates["segment_assets_prefix"] = assets_prefix
+
+        target_lang = metadata.get("target_lang")
+        if target_lang:
+            project_updates["target_lang"] = target_lang
+
+        source_lang = metadata.get("source_lang")
+        if source_lang:
+            project_updates["source_lang"] = source_lang
+
+        metadata_key = metadata.get("metadata_key")
+        if metadata_key:
+            project_updates["segment_metadata_key"] = metadata_key
+
+        result_key_meta = metadata.get("result_key")
+        if result_key_meta:
+            project_updates["segment_result_key"] = result_key_meta
+
+    if payload.status:
+        project_updates.setdefault("status", payload.status)
+
+    project_id = updated.get("project_id")
+    if project_updates and project_id:
+        try:
+            project_oid = ObjectId(project_id)
+        except InvalidId:
+            project_oid = None
+        if project_oid:
+            try:
+                await db["projects"].update_one(
+                    {"_id": project_oid},
+                    {"$set": project_updates},
+                )
+            except PyMongoError as exc:
+                logger.error(
+                    "Failed to update project %s with segment metadata: %s",
+                    project_id,
+                    exc,
+                )
 
     return _serialize_job(updated)
 
