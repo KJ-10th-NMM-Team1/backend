@@ -48,7 +48,6 @@ async def stream_pipeline_status(project_id: str, db: DbDep):
                 yield f"data: {json.dumps(data)}\n\n"
 
                 # (폴링)3초마다 업데이트 (실제로는 파이프라인 상태 변경 시에만 전송하도록 최적화 가능)
-
                 await asyncio.sleep(3)
 
         except Exception as e:
