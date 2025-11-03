@@ -1,0 +1,35 @@
+# models.py
+from pydantic import ConfigDict, BaseModel, Field, BeforeValidator, EmailStr
+from typing import Optional, List, Any, Annotated
+from bson import ObjectId
+from datetime import datetime
+
+PyObjectId = Annotated[
+    str,  # 👈 최종 변환될 타입은 'str'입니다.
+    BeforeValidator(lambda v: str(v) if isinstance(v, ObjectId) else v),
+]
+
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3)
+    email: EmailStr  # 👈 Pydantic이 이메일 형식을 자동으로 검증
+    hashed_password: str = Field(..., min_length=6, description="6자 이상")
+    role: str
+
+
+class User(BaseModel):
+    email: str
+    username: str
+    hashed_password: str
+    role: str
+
+
+class UserOut(BaseModel):
+    id: PyObjectId = Field(alias="_id")
+    username: str
+    role: str
+    hashed_password: str
+    email: EmailStr
+    createdAt: datetime
+
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
