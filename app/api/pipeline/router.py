@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 from typing import Any, Dict
-import json
-import asyncio
+import asyncio, json
 from datetime import datetime
+
+from sse_starlette.sse import EventSourceResponse
+from collections import defaultdict
+
 
 from app.api.deps import DbDep
 from .service import get_pipeline_status, update_pipeline_stage
@@ -75,3 +78,22 @@ def _serialize_datetime(obj: Any) -> Any:
     elif isinstance(obj, list):
         return [_serialize_datetime(item) for item in obj]
     return obj
+
+
+project_channels = defaultdict(set)  # project_id -> events queue
+
+
+@pipeline_router.get("/{project_id}/events")
+async def pipeline_events(project_id: str):
+    queue = asyncio.Queue()
+    project_channels[project_id].add(queue)
+
+    async def event_generator():
+        try:
+            while True:
+                data = await queue.get()
+                yield {"event": "stage", "data": json.dumps(data)}
+        finally:
+            project_channels[project_id].discard(queue)
+
+    return EventSourceResponse(event_generator())

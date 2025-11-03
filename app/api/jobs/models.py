@@ -36,7 +36,14 @@ class JobRead(BaseModel):
 
 
 class JobUpdateMetadata(BaseModel):
-    stage: Literal["downloaded", "stt_completed", "tts_prepare", "completed"]
+    stage: Literal[
+        "downloaded",
+        "stt_completed",
+        "mt_prepare",
+        "mt_completed",
+        "tts_prepare",
+        "tts_completed",
+    ]
     segments_count: int
     metadata_key: str
     result_key: str
