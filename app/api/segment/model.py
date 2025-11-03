@@ -59,7 +59,7 @@ class RequestSegment(BaseModel):
     end_point: float
 
     # DetectingIssue 모델의 리스트를 임베딩
-    issues: List[DetectingIssue] = Field(default_factory=list)
+    # issues: List[DetectingIssue] = Field(default_factory=list)
 
     class Config:
         allow_population_by_field_name = True
