@@ -9,10 +9,8 @@ from ...config.env import ACCESS_TOKEN_EXPIRE_MINUTES
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@auth_router.put(
-    "/register", response_model=UserOut, status_code=status.HTTP_201_CREATED
-)
-async def register(
+@auth_router.put("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def signup(
     user_data: UserCreate, auth_service: AuthService = Depends(AuthService)
 ) -> UserOut:
     return await auth_service.create_user(user_data)

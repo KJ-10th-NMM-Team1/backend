@@ -140,14 +140,13 @@ async def _create_default_pipeline(db: DbDep, project_id: str) -> Dict[str, Any]
         "project_id": project_id,
         "stages": default_stages,
         "current_stage": "upload",
-        "overall_progress": 14,  # 1/7 완료
+        "overall_progress": 0,  # 프로젝트 생성 땐 업로드 이전
         "created_at": now,
         "updated_at": now,
     }
 
     result = await db["pipelines"].insert_one(pipeline_doc)
     pipeline_doc["_id"] = result.inserted_id
-
     return pipeline_doc
 
 

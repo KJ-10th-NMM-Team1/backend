@@ -18,8 +18,11 @@ source "$VENV_DIR"
 # 4. 애플리케이션 코드가 있는 디렉토리로 이동
 cd $APP_DIR
 
+# 시작 전 ingest 실행 (실패해도 서버는 계속 기동)
+echo "Running glossary ingestion..."
+python script/ingest.py || echo "WARNING: glossary ingestion failed (continuing startup)"
+
 # 5. FastAPI 서버를 백그라운드로 실행 (uvicorn)
 echo "Starting FastAPI server (uvicorn): $APP_DIR..."
 nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2> $APP_DIR/error.log &
 echo "Life Cycle - ApplicationStart: complete."
-

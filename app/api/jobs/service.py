@@ -308,7 +308,7 @@ async def update_job_status(
         update_operations["$set"]["error"] = payload.error
 
     if payload.metadata is not None:
-        update_operations["$set"]["metadata"] = payload.metadata
+        update_operations["$set"]["metadata"] = payload.metadata.model_dump()
 
     updated = await db[JOB_COLLECTION].find_one_and_update(
         {"_id": job_oid},
@@ -327,9 +327,7 @@ async def update_job_status(
         segments_meta = metadata.get("segments")
         if isinstance(segments_meta, list):
             normalized_segments = [
-                _normalize_segment_record(
-                    seg if isinstance(seg, dict) else {}, index=i
-                )
+                _normalize_segment_record(seg if isinstance(seg, dict) else {}, index=i)
                 for i, seg in enumerate(segments_meta)
             ]
             project_updates["segments"] = normalized_segments

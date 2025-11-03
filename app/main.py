@@ -5,7 +5,6 @@ from app.config.env import origins as allowed_origins
 from app.api.deps import DbDep
 from app.config.lifespan import lifespan
 from app.api.main import api_router
-from app.api.project import router
 
 app = FastAPI(
     title="Dupilot",
