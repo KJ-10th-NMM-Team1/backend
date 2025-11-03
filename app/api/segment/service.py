@@ -1,5 +1,5 @@
 from ..deps import DbDep
-from .model import ResponseSegment, RequestSegment
+from .model import ResponseSegment
 from typing import List
 
 
@@ -30,10 +30,3 @@ class SegmentService:
                 all_segments.append(ResponseSegment(**segment_data))
 
         return all_segments
-
-    async def update_segment(self, request: RequestSegment):
-        result = await self.collection.update_one(
-            {"_id": request.project_id, "segment_id": request.segment_id},
-            {"$set": {"translate_context": request.translate_context}},
-        )
-        return result
