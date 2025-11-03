@@ -7,6 +7,7 @@ from bson.errors import InvalidId
 
 from ..deps import DbDep
 from ..project.models import ProjectCreate, ProjectUpdate, ProjectPublic
+from ..pipeline.service import _create_default_pipeline
 
 
 class ProjectCreateResult(TypedDict):
@@ -37,7 +38,12 @@ async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResu
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Insert did not return an ID",
         )
-    return {"project_id": str(result.inserted_id)}
+
+    project_id = str(result.inserted_id)
+    # 프로젝트 생성 시 파이프 라인도 생성
+    await _create_default_pipeline(db, project_id)
+
+    return {"project_id": project_id}
 
 
 async def update_project(db: DbDep, payload: ProjectUpdate) -> ProjectPublic:
