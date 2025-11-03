@@ -1,13 +1,18 @@
-from datetime import datetime
-from uuid import uuid4
-from fastapi import APIRouter, HTTPException
-from fastapi import Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from .segment_service import SegmentService
 from .history_service import HistoryService
-from .model import ResponseSegment, RequestSegment
+from .model import (
+    RequestSegment,
+    ResponseSegment,
+    SegmentRetranslateRequest,
+    SegmentRetranslateResponse,
+)
 from typing import List
+from ..deps import DbDep
+from ..jobs.service import start_segment_tts_job
 
 segment_router = APIRouter(prefix="/segment", tags=["segment"])
+editor_segment_router = APIRouter(prefix="/editor/projects", tags=["segment"])
 
 
 @segment_router.get("/{project_id}", response_model=List[ResponseSegment])
@@ -33,3 +38,46 @@ async def save_segment(
     request: RequestSegment, service: SegmentService = Depends(SegmentService)
 ):
     return await service.update_segment(request)
+
+
+@editor_segment_router.put(
+    "/{project_id}/segments/{segment_id}/retranslate",
+    response_model=SegmentRetranslateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retranslate_segment(
+    project_id: str,
+    segment_id: str,
+    payload: SegmentRetranslateRequest,
+    db: DbDep,
+    service: SegmentService = Depends(SegmentService),
+):
+    project, segment, index, project_object_id = await service.get_project_segment(
+        project_id, segment_id
+    )
+
+    await service.set_segment_translation(
+        project_object_id,
+        index,
+        payload.text,
+        editor_id=payload.editor_id,
+    )
+
+    segment["translate_context"] = payload.text
+    if payload.editor_id:
+        segment["editor_id"] = payload.editor_id
+
+    job = await start_segment_tts_job(
+        db,
+        project=project,
+        segment_index=index,
+        segment=segment,
+        text=payload.text,
+    )
+
+    return SegmentRetranslateResponse(
+        job_id=job.job_id,
+        segment_id=segment_id,
+        segment_index=index,
+        status=job.status,
+    )
