@@ -31,12 +31,6 @@ python3.12 -m venv "$VENV_DIR"
 echo "Activating virtual environment..."
 source "$VENV_DIR/bin/activate"
 
-aws secretsmanager get-secret-value \
-    --secret-id "my-app/env" \  # 👈 Secrets Manager에 저장한 암호 이름
-    --region ap-northeast-2 \   # 👈 AWS_REGION을 여기서 지정 (또는 EC2 환경변수로 설정)
-    --query SecretString \
-    --output text | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]' > /var/www/my-app/.env
-
 pip install --upgrade pip
 
 REQ_FILE="$ARCHIVE_ROOT/requirements.txt" 
