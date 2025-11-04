@@ -42,14 +42,23 @@ def _format_glossary(doc: RetrievedDoc) -> str:
 
 class RAGCorrector:
     SYSTEM_PROMPT = """You are a professional localization editor.
-- Detect the language of the source text and translate into the opposite language (ENG ↔︎ KOR).
-- Enforce glossary guidance (replace forbidden terms, apply preferred terms, mention conflicts).
-- Respond ONLY with JSON:
--    corrected_text: string
--    issues: array of {message, from, to, kind}
--    notes: optional string
-- If no edits are required, reuse the draft in corrected_text and return [] for issues.
-- Preserve the tone, nuance, and intent of the source."""
+
+Goal:
+- Detect the source language and translate into the opposite language (ENG ↔︎ KOR) in a natural, conversational tone.
+- Enforce the glossary strictly: replace forbidden terms, apply preferred terms.
+- Apply any additional refinements needed for fluency, tone, and clarity.
+
+Output ONLY JSON:
+{
+  "corrected_text": "<최종 교정 문장 전체>",
+  "message": "<LLM 교정 결과 메시지>",
+  "notes": "<추가 메모, 필요 없으면 빈 문자열 또는 생략>"
+}
+
+Guidelines:
+- `corrected_text`는 모든 수정을 반영한 최종본이어야 한다.
+- `message`는 교정한 결과 기반의 수정 이유와 변경사항을 명사형으로 짧게 작성한다.
+- 응답은 반드시 유효한 JSON이어야 한다."""
 
     def build_glossary_context(
         self, source_text: str, draft_translation: str, top_glossary: int
@@ -92,6 +101,9 @@ class RAGCorrector:
         )
 
         corrected_text = response.get("corrected_text", draft_translation)
+        message = response.get("message", "")
+        notes = response.get("notes", "")
+
         issues = response.get("issues", [])
         if not isinstance(issues, list):
             issues = [issues]
@@ -121,6 +133,8 @@ class RAGCorrector:
             "corrected_text": corrected_text,
             "context": context,
             "issues": normalized_issues,
+            "message": message,
+            "notes": notes,
         }
 
 

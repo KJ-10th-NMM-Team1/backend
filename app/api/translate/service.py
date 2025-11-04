@@ -99,24 +99,37 @@ async def glosary_suggestion(db: DbDep, segment_oid: str):
     #     source=source_text,
     #     mt=translated_text,
     # )
-
+    # 분기 처리?
     review = await rag_glossary_correction(
         source_text=source_text, draft_translation=translated_text
     )
-
+    review["checked_at"] = datetime.now().isoformat() + "Z"
     print(review)
 
-    review["checked_at"] = datetime.now().isoformat() + "Z"
+    await db["issues"].insert_one(
+        {
+            "segment_id": segment_oid,
+            "message": review.get("message", ""),
+            "recommend_text": review.get("corrected_text", ""),
+            "kind": "LLM 교정",
+            "created_at": datetime.now(),
+        }
+    )
 
-    for issue in review.get("issues", []):
-        await db["issues"].insert_one(
-            {
-                "segment_id": segment_oid,
-                "message": issue["message"],
-                "from": issue["from"],
-                "to": issue["to"],
-                "created_at": datetime.now(),
-            }
-        )
+    # issues = review.get("issues", [])
+    # await db["issues"].insert_many(
+    #     [
+    #         {
+    #             "segment_id": segment_oid,
+    #             "message": issue["message"],
+    #             "from": issue["from"],
+    #             "to": issue["to"],
+    #             "kind": issue["kind"],
+    #             "created_at": datetime.now(),
+    #             "recommend": review.get("corrected_text", ""),
+    #         }
+    #         for issue in issues
+    #     ]
+    # )
 
     return review
