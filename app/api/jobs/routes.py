@@ -108,14 +108,22 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             status=PipelineStatus.COMPLETED,
         )
     elif stage == "mt_prepare":
-        update_payload.update(stage_id="mt", progress=0)
-    elif stage == "mt_completed":
+        update_payload.update(
+            stage_id="mt",
+            progress=0,
+        )
+    elif stage == "mt_completed":  # mt 완료
         update_payload = await mt_complete_processing(db, project_id, update_payload)
     elif stage == "tts_prepare":
-        update_payload.update(stage_id="tts", progress=0)
-    elif stage in {"tts_completed", "completed"}:
         update_payload.update(
-            stage_id="tts", progress=100, status=PipelineStatus.COMPLETED
+            stage_id="tts",
+            progress=0,
+        )
+    elif stage == "tts_completed":  # tts 완료
+        update_payload.update(
+            stage_id="tts",
+            progress=100,
+            status=PipelineStatus.COMPLETED,
         )
     elif stage == "failed":
         update_payload.update(status=PipelineStatus.FAILED)
