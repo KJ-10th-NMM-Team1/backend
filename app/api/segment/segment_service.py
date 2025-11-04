@@ -9,6 +9,7 @@ from .model import ResponseSegment, RequestSegment
 
 class SegmentService:
     def __init__(self, db: DbDep):
+        self.db = db
         self.collection_name = "projects"
         self.collection = db.get_collection(self.collection_name)
         self.projection = {
@@ -20,13 +21,34 @@ class SegmentService:
             "video_source": 1,
         }
 
+    async def save_segment(self, request: RequestSegment, db_name: str):
+        project_oid = ObjectId(request.project_id)
+        collection = self.db.get_collection(db_name)
+        doc = request.model_dump(by_alias=True)
+        doc["_id"] = project_oid
+        result = await collection.insert_one(doc)
+        return str(result.inserted_id)
+
+    async def find_segment(self, project_id: str, db_name: str = "segments"):
+        collection = self.db.get_collection(db_name)
+        docs = await collection.find({"_id": ObjectId(project_id)}).to_list(length=None)
+        result: List[ResponseSegment] = []
+
+        for doc in docs:
+            doc["project_id"] = project_id
+            result.append(ResponseSegment(**doc))
+
+        return result
+
     async def find_all_segment(self, project_id: Optional[str] = None):
         query: Dict[str, Any] = {}
         if project_id:
             object_id = self._as_object_id(project_id)
             query["_id"] = object_id
 
-        project_docs = await self.collection.find(query, self.projection).to_list(length=None)
+        project_docs = await self.collection.find(query, self.projection).to_list(
+            length=None
+        )
 
         all_segments: List[ResponseSegment] = []
 
