@@ -78,7 +78,6 @@ async def pretts_complete_processing(db, project_id, segments):
 
 @router.post("/{job_id}/status", response_model=JobRead)
 async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> JobRead:
-    # job 상태 업데이트
     result = await update_job_status(db, job_id, payload)
 
     metadata = None
@@ -90,7 +89,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                 else payload.metadata
             )
 
-    # state 없을 때 리턴
     if not metadata or "stage" not in metadata:
         return result
 
@@ -101,19 +99,12 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
         "status": PipelineStatus.PROCESSING,
     }
 
-    # stage별, project 파이프라인 업데이트
-    if stage == "downloaded":  # s3에서 불러오기 완료 (stt 시작)
+    if stage == "downloaded":
+        update_payload.update(stage_id="stt", progress=0)
+    elif stage == "stt_completed":
         update_payload.update(
-            stage_id="stt",
-            progress=0,
+            stage_id="stt", progress=100, status=PipelineStatus.COMPLETED
         )
-    elif stage == "stt_completed":  # stt 완료
-        update_payload.update(
-            stage_id="stt",
-            progress=100,
-            status=PipelineStatus.COMPLETED,
-        )
-
     elif stage == "mt_prepare":
         update_payload.update(
             stage_id="mt",
@@ -139,7 +130,8 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=100,
             status=PipelineStatus.COMPLETED,
         )
+    elif stage == "failed":
+        update_payload.update(status=PipelineStatus.FAILED)
 
     await update_pipeline(db, project_id, update_payload)
-
     return result

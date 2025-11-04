@@ -30,7 +30,7 @@ async def get_voice_config(db: DbDep, project_id: str) -> Dict[str, any]:
 
 
 async def update_voice_config(
-    db: DbDep, project_id: str, voice_config: Dict[str, str]
+    db: DbDep, project_id: str, voice_config: Dict
 ) -> Dict[str, any]:
     """프로젝트의 보이스 설정 업데이트"""
     try:
@@ -41,9 +41,10 @@ async def update_voice_config(
         ) from exc
 
     try:
+        voice_config_dict = {k: v.dict() if hasattr(v, 'dict') else v for k, v in voice_config.items()}
         result = await db["projects"].update_one(
             {"_id": project_oid},
-            {"$set": {"voice_config": voice_config, "updated_at": datetime.now()}},
+            {"$set": {"voice_config": voice_config_dict, "updated_at": datetime.now()}},
         )
 
         if result.matched_count == 0:
