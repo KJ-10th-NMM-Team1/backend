@@ -1,7 +1,7 @@
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from typing import List, Any
 
 from app.api.deps import DbDep
 from .models import ProjectOut
@@ -48,10 +48,34 @@ async def get_project(project_id: str, db: DbDep) -> ProjectOut:
             detail="Invalid project_id",
         ) from exc
 
-    doc = await db["projects"].find_one({"_id": project_oid})
-    if not doc:
+    project = await db["projects"].find_one({"_id": project_oid})
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
         )
-    return ProjectOut.model_validate(doc)
+
+    segments = (
+        await db["segments"]
+        .find({"project_id": project_oid})
+        .sort("order", 1)
+        .to_list(length=None)
+    )
+    segment_ids = [seg["_id"] for seg in segments]
+
+    issues = (
+        await db["issues"]
+        .find({"segment_id": {"$in": segment_ids}})
+        .to_list(length=None)
+    )
+
+    issues_by_segment: dict[ObjectId, list[dict[str, Any]]] = {}
+    for issue in issues:
+        issues_by_segment.setdefault(issue["segment_id"], []).append(issue)
+
+    for segment in segments:
+        seg_id = segment["_id"]
+        segment["issues"] = issues_by_segment.get(seg_id, [])
+
+    project["segments"] = segments
+    return ProjectOut.model_validate(project)
