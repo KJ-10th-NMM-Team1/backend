@@ -23,39 +23,6 @@ mkdir -p $APP_DIR
 
 ENV_FILE="$APP_DIR/.env"
 
-cat <<'EOF' > "$ENV_FILE"
-# CORS: 리액트 개발 서버 허용
-AWS_PROFILE=dev
-CORS_ORIGINS=http://localhost:5173
-# Mongo (compose상 서비스명 mongo 기준)
-MONGO_URL_DEV=mongodb://root:example@ec2-52-79-235-56.ap-northeast-2.compute.amazonaws.com:27017/dupilot?authSource=admin
-# MONGO_URL_DEV=mongodb://best:absc3513@localhost:27017/
-# 미리보기 샘플(원하면 나중에 S3 presigned로 교체)
-SAMPLE_VIDEO_URL=https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4
-SAMPLE_AUDIO_URL=https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3
-APP_ENV=dev
-DB_NAME=dupilot
-# (S3 붙일 때)
-AWS_S3_BUCKET=dupilot-dev-media
-AWS_REGION=ap-northeast-2
-# Job pipeline (dev 기본값; 실서비스는 실제 호스트/큐 URL로 교체)
-# JOB_CALLBACK_BASE_URL=http://host.docker.internal:8000
-JOB_CALLBACK_BASE_URL=http://ec2-15-164-97-47.ap-northeast-2.compute.amazonaws.com:8000
-JOB_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/148761638563/dupilot-queue.fifo
-JOB_QUEUE_FIFO=True
-JOB_TARGET_LANG=en
-JOB_SOURCE_LANG=ko
-JOB_RESULT_VIDEO_PREFIX=projects/{project_id}/outputs/videos/{job_id}.mp4
-JOB_RESULT_METADATA_PREFIX=projects/{project_id}/outputs/metadata/{job_id}.json
-JOB_QUEUE_WAIT=20
-JOB_VISIBILITY_TIMEOUT=300
-
-SECRET_KEY=a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5
-GOOGLE_CLIENT_ID=502610250439-1ltnk1tmom9sotu285ch49s9ktur1tb2.apps.googleusercontent.com
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-EOF
-
 echo "Created environment file at $ENV_FILE"
 
 echo "Create APP venv: $VENV_DIR..."
