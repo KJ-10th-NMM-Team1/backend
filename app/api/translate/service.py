@@ -1,87 +1,15 @@
-import json
-import os
 import re
+from dotenv import load_dotenv
 from datetime import datetime
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, List
 from fastapi import HTTPException, status
-import faiss
-from sentence_transformers import SentenceTransformer
 from bson import ObjectId
 from bson.errors import InvalidId
+from .rag import rag_glossary_correction
+from .utils import vector_search
 
 from ..deps import DbDep
 
-STORE_DIR = Path(os.getenv("GLOSSARY_STORE_DIR", "store"))
-GLOSSARY_INDEX_PATH = STORE_DIR / "glossary.faiss"
-GLOSSARY_META_PATH = STORE_DIR / "glossary.jsonl"
-
-MODEL_NAME = os.getenv("GLOSSARY_EMBED_MODEL", "BAAI/bge-m3")
-
-_DOCS: list[dict[str, Any]] | None = None
-_INDEX: faiss.Index | None = None
-_MODEL: SentenceTransformer | None = None
-
-
-@dataclass
-class RetrievedDoc:
-    kind: str
-    text: str
-    raw: dict[str, Any]
-    score: float
-
-
-def vector_search(query: str, top_k: int = 5):
-    global _INDEX, _DOCS, _MODEL
-
-    if not query.strip():
-        return []
-    normalized = (query or "").strip()
-    if not normalized:
-        return []
-
-    #  전역으로 필요할때 한번만 로드
-    if _DOCS is None:
-        if not GLOSSARY_META_PATH.exists():
-            return []
-        with open(GLOSSARY_META_PATH, "r", encoding="utf-8") as f:
-            _DOCS = [json.loads(line) for line in f]
-
-    if _INDEX is None:
-        if not GLOSSARY_INDEX_PATH.exists():
-            return []
-        _INDEX = faiss.read_index(str(GLOSSARY_INDEX_PATH))
-
-    if _MODEL is None:
-        _MODEL = SentenceTransformer(MODEL_NAME)
-
-    if query == "warmup":
-        return
-
-    query_emb = _MODEL.encode(
-        [normalized],
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-    )
-
-    scores, indices = _INDEX.search(query_emb.astype("float32"), top_k)
-
-    results: List[RetrievedDoc] = []
-    for score, idx in zip(scores[0], indices[0]):
-        if idx < 0 or idx >= len(_DOCS):
-            continue
-        doc = _DOCS[idx]
-        results.append(
-            RetrievedDoc(
-                kind=doc.get("kind", "glossary"),
-                text=doc.get("text", ""),
-                raw=doc.get("raw", {}),
-                score=float(score),
-            )
-        )
-
-    return results
+load_dotenv()
 
 
 def detect_glossary_issues(source: str, mt: str, top_k: int = 5):
@@ -167,21 +95,41 @@ async def glosary_suggestion(db: DbDep, segment_oid: str):
             detail="Segment missing source or translated text",
         )
 
-    review = detect_glossary_issues(
-        source=source_text,
-        mt=translated_text,
+    # review = detect_glossary_issues(
+    #     source=source_text,
+    #     mt=translated_text,
+    # )
+    # 분기 처리?
+    review = await rag_glossary_correction(
+        source_text=source_text, draft_translation=translated_text
     )
     review["checked_at"] = datetime.now().isoformat() + "Z"
+    print(review)
 
-    for issue in review.get("issues", []):
-        await db["issues"].insert_one(
-            {
-                "segment_id": segment_oid,
-                "message": issue["message"],
-                "from": issue["from"],
-                "to": issue["to"],
-                "created_at": datetime.now(),
-            }
-        )
+    await db["issues"].insert_one(
+        {
+            "segment_id": segment_oid,
+            "message": review.get("message", ""),
+            "recommend_text": review.get("corrected_text", ""),
+            "kind": "LLM 교정",
+            "created_at": datetime.now(),
+        }
+    )
+
+    # issues = review.get("issues", [])
+    # await db["issues"].insert_many(
+    #     [
+    #         {
+    #             "segment_id": segment_oid,
+    #             "message": issue["message"],
+    #             "from": issue["from"],
+    #             "to": issue["to"],
+    #             "kind": issue["kind"],
+    #             "created_at": datetime.now(),
+    #             "recommend": review.get("corrected_text", ""),
+    #         }
+    #         for issue in issues
+    #     ]
+    # )
 
     return review

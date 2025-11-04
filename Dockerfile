@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 # 1) OS 패키지 설치 (필요한 경우만 추가)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl tzdata git procps iproute2 net-tools lsof dnsutils \
+      ca-certificates curl tzdata git procps iproute2 net-tools lsof dnsutils vim \
  && update-ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 

@@ -72,3 +72,15 @@ class RequestSegment(BaseModel):
         allow_population_by_field_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
+
+
+class SegmentRetranslateRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+    editor_id: PyObjectId | None = None
+
+
+class SegmentRetranslateResponse(BaseModel):
+    job_id: PyObjectId
+    segment_id: PyObjectId
+    segment_index: int
+    status: str

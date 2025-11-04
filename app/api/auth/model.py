@@ -24,6 +24,15 @@ class User(BaseModel):
     role: str
 
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class GoogleLogin(BaseModel):
+    id_token: str = Field(..., description="Google ID token received from client")
+
+
 class UserOut(BaseModel):
     id: PyObjectId = Field(alias="_id")
     username: str
@@ -33,3 +42,7 @@ class UserOut(BaseModel):
     createdAt: datetime
 
     model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
+
+
+class TokenData(BaseModel):
+    sub: Optional[str] = None

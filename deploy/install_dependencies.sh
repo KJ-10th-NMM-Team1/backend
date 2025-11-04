@@ -22,7 +22,7 @@ echo "Create APP directory: $APP_DIR"
 mkdir -p $APP_DIR
 
 echo "Create APP venv: $VENV_DIR..."
-python3.9 -m venv "$VENV_DIR"
+python3.12 -m venv "$VENV_DIR"
 
 echo "Activating virtual environment..."
 source "$VENV_DIR/bin/activate"

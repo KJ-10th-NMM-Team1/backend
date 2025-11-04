@@ -23,6 +23,7 @@ async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResu
         "video_source": None,
         "created_at": now,
         "updated_at": now,
+        "owner_code": payload.owner_code
     }
 
     try:
