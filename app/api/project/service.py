@@ -21,31 +21,20 @@ async def get_project_paging(
     page: int = 1,
     limit: int = 10,
 ):
-    try:
-        skip = (page - 1) * limit
-        docs = (
-            await db["projects"]
-            .find({"owner_code": user_id})
-            .sort(sort, -1)
-            .skip(skip)
-            .limit(limit)
-            .to_list(length=limit)
-        )
+    skip = (page - 1) * limit
+    docs = (
+        await db["projects"]
+        .find({"owner_code": user_id})
+        .sort(sort, -1)
+        .skip(skip)
+        .limit(limit)
+        .to_list(length=limit)
+    )
 
-        for doc in docs:
-            doc["project_id"] = str(doc["_id"])
+    for doc in docs:
+        doc["project_id"] = str(doc["_id"])
 
-        return [ProjectOut.model_validate(doc) for doc in docs]
-    except InvalidId as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid project_id",
-        ) from exc
-    except PyMongoError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve projects",
-        ) from exc
+    return [ProjectOut.model_validate(doc) for doc in docs]
 
 
 async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResult:

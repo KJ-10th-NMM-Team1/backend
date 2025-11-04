@@ -2,7 +2,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Any, Optional
-
+from pymongo.errors import PyMongoError
 from app.api.deps import DbDep
 from .models import ProjectOut
 from .service import get_project_paging
@@ -36,9 +36,20 @@ async def list_my_projects(
     page: int = Query(1, ge=1),
     limit: int = Query(6, ge=1, le=100),
 ) -> List[ProjectOut]:
-    return await get_project_paging(
-        db, sort=sort, page=page, limit=limit, user_id=current_user.id
-    )
+    try:
+        return await get_project_paging(
+            db, sort=sort, page=page, limit=limit, user_id=current_user.id
+        )
+    except InvalidId as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid project_id",
+        ) from exc
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve projects",
+        ) from exc
 
 
 @project_router.get("/", response_model=List[ProjectOut], summary="프로젝트 전체 목록")
