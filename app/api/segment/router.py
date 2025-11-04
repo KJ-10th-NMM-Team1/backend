@@ -1,3 +1,4 @@
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from .segment_service import SegmentService
 from .history_service import HistoryService
@@ -19,7 +20,7 @@ editor_segment_router = APIRouter(prefix="/editor/projects", tags=["segment"])
 async def get_segment_all(
     project_id: str, service: SegmentService = Depends(SegmentService)
 ):
-    find_list = await service.find_all_segment(project_id)
+    find_list = await service.find_segment(project_id)
     return find_list
 
 
@@ -29,6 +30,16 @@ async def segment_history(
 ):
     try:
         return await history_service.insert_one_history(request)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@segment_router.post("/{project_id}/test/save", response_model=str)
+async def segment_test_save(
+    request: RequestSegment, segment_service: SegmentService = Depends(SegmentService)
+):
+    try:
+        return await segment_service.test_save_segment(request, db_name="segments")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

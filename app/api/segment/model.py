@@ -31,9 +31,18 @@ class ResponseSegment(BaseModel):
     editor_id: PyObjectId
     translate_context: str
     sub_langth: float
+
+    # --- Required Fields (시간 정보는 필수라고 가정) ---
     start_point: float
     end_point: float
-    assets: Dict[str, Any] | None = None
+    seg_id: int
+    seg_txt: str
+    start: float
+    end: float
+    length: float
+    editor: str | None = None
+    trans_txt: str | None = None
+    # assets: List[]
     source_key: str | None = None
     bgm_key: str | None = None
     tts_key: str | None = None
@@ -64,6 +73,19 @@ class RequestSegment(BaseModel):
     # --- Required Fields (시간 정보는 필수라고 가정) ---
     start_point: float
     end_point: float
+    seg_id: int
+    seg_txt: str
+    start: float
+    end: float
+    length: float
+    editor: str
+    trans_txt: str
+    # assets: List[]
+    source_key: str | None = None
+    bgm_key: str | None = None
+    tts_key: str | None = None
+    mix_key: str | None = None
+    video_key: str | None = None
 
     # DetectingIssue 모델의 리스트를 임베딩
     # issues: List[DetectingIssue] = Field(default_factory=list)

@@ -21,6 +21,10 @@ fi
 echo "Create APP directory: $APP_DIR"
 mkdir -p $APP_DIR
 
+ENV_FILE="$APP_DIR/.env"
+
+echo "Created environment file at $ENV_FILE"
+
 echo "Create APP venv: $VENV_DIR..."
 python3.12 -m venv "$VENV_DIR"
 
