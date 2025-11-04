@@ -8,6 +8,7 @@ from .segment.router import segment_router, editor_segment_router
 from .pipeline.router import pipeline_router
 from .auth.router import auth_router
 from .translate.routes import trans_router
+from .translator.routes import translator_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -21,3 +22,4 @@ api_router.include_router(job_router)
 api_router.include_router(pipeline_router)
 api_router.include_router(auth_router)
 api_router.include_router(trans_router)
+api_router.include_router(translator_router)
