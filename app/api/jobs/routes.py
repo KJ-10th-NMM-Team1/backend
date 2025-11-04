@@ -17,17 +17,69 @@ async def read_job(job_id: str, db: DbDep) -> JobRead:
     return await get_job(db, job_id)
 
 
+async def dispatch_pipeline(project_id: str, update_payload):
+    listeners = project_channels.get(project_id, set())
+    event = {
+        "project_id": project_id,
+        "stage": update_payload.get("stage_id"),
+        "status": update_payload.get("status", PipelineStatus.PROCESSING).value,
+        "progress": update_payload.get("progress"),
+        "timestamp": datetime.now().isoformat() + "Z",
+    }
+    for queue in list(listeners):
+        await queue.put(event)
+
+
+async def update_pipeline(db, project_id, payload):
+    # 파이프라인 디비 수정
+    await update_pipeline_stage(db, PipelineUpdate(**payload))
+    # 파이프라인 SSE 큐에 추가
+    await dispatch_pipeline(project_id, payload)
+
+
+async def mt_complete_processing(db, project_id, update_payload):
+    update_payload.update(
+        stage_id="mt",
+        progress=100,
+        status=PipelineStatus.COMPLETED,
+    )
+    await update_pipeline(db, project_id, update_payload)
+
+    # rag processing
+    rag_payload = {
+        "project_id": project_id,
+        "stage_id": "rag",
+        "status": PipelineStatus.PROCESSING,
+        "progress": 0,
+    }
+    await update_pipeline(db, project_id, rag_payload)
+
+    try:
+        # project_id의 세그먼트에 대해 이슈생성
+        await suggestion_by_project(db, project_id)
+    except Exception:
+        rag_payload["status"] = PipelineStatus.FAILED
+        rag_payload["progress"] = 0
+        await update_pipeline(db, project_id, rag_payload)
+        raise
+    else:
+        rag_payload["status"] = PipelineStatus.COMPLETED
+        rag_payload["progress"] = 100
+    return rag_payload
+
+
 @router.post("/{job_id}/status", response_model=JobRead)
 async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> JobRead:
     # job 상태 업데이트
     result = await update_job_status(db, job_id, payload)
 
     if payload.metadata is not None:
-        metadata = (
-            payload.metadata.model_dump()
-            if hasattr(payload.metadata, "model_dump")
-            else payload.metadata
-        )
+        if payload.metadata is not None:
+            metadata = (
+                payload.metadata.model_dump()
+                if hasattr(payload.metadata, "model_dump")
+                else payload.metadata
+            )
 
     # state 없을 때 리턴
     if not metadata or "stage" not in metadata:
@@ -59,14 +111,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=0,
         )
     elif stage == "mt_completed":  # mt 완료
-        update_payload.update(
-            stage_id="mt",
-            progress=100,
-            status=PipelineStatus.COMPLETED,
-        )
-        # project의 세그먼트들에 이슈생성
-        await suggestion_by_project(db, project_id)
-
+        update_payload = await mt_complete_processing(db, project_id, update_payload)
     elif stage == "tts_prepare":
         update_payload.update(
             stage_id="tts",
@@ -79,18 +124,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             status=PipelineStatus.COMPLETED,
         )
 
-    # 파이프라인 디비 수정
-    await update_pipeline_stage(db, PipelineUpdate(**update_payload))
+    await update_pipeline(db, project_id, update_payload)
 
-    # 파이프라인
-    listeners = project_channels.get(project_id, set())
-    event = {
-        "project_id": project_id,
-        "stage": update_payload.get("stage_id"),
-        "status": update_payload.get("status", PipelineStatus.PROCESSING).value,
-        "progress": update_payload.get("progress"),
-        "timestamp": datetime.now().isoformat() + "Z",
-    }
-    for queue in list(listeners):
-        await queue.put(event)
     return result
