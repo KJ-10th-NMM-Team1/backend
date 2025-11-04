@@ -1,8 +1,8 @@
 version: 0.0
 os: linux
 files:
-  - source: /  # zip 파일의 모든 것 (/)
-    destination: /home/ubuntu/app  # EC2의 이 폴더로 복사
+  - source: / # zip 파일의 모든 것 (/)
+    destination: /home/ubuntu/app # EC2의 이 폴더로 복사
     overwrite: true # 덮어쓰기 허용
 
 permissions: # 복사된 파일에 권한 부여
@@ -29,6 +29,12 @@ hooks:
     - location: deploy/install_dependencies.sh # 의존성 설치
       timeout: 300
       runas: ubuntu
+
+  AfterInstall:
+    - location: deploy/create_env.sh # 👈 방금 만든 .env 생성 스크립트
+      timeout: 300
+      runas: ubuntu
+
   ApplicationStart:
     - location: deploy/start_server.sh # 새 서버 시작
       timeout: 300
