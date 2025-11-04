@@ -3,10 +3,8 @@ from fastapi.responses import StreamingResponse
 from typing import Any, Dict
 import asyncio, json
 from datetime import datetime
-
 from sse_starlette.sse import EventSourceResponse
 from collections import defaultdict
-
 
 from app.api.deps import DbDep
 from .service import get_pipeline_status, update_pipeline_stage
