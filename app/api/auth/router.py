@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from datetime import timedelta
-from .model import UserCreate, User, UserOut
+from .model import UserCreate, UserOut, UserLogin
 from typing import Dict, Any
-from .service import AuthService
+from .service import AuthService, get_current_user_from_cookie
 from ...config.env import ACCESS_TOKEN_EXPIRE_MINUTES
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -18,12 +17,13 @@ async def signup(
 
 @auth_router.post("/login", response_model=Dict[str, Any])
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
+    response: Response,  # 👈 [3] Response 객체를 주입받습니다.
+    form_data: UserLogin,  # 👈 [4] JSON (UserLogin 모델)을 받습니다.
     auth_service: AuthService = Depends(AuthService),
 ):
 
     # 4. DB에서 사용자 찾기
-    user = await auth_service.get_user_by_email(email=form_data.username)
+    user = await auth_service.get_user_by_email(email=form_data.email)
 
     # 5. 사용자가 없거나 비밀번호가 틀리면 401 에러
     if not user or not auth_service.verify_password(
@@ -42,5 +42,38 @@ async def login_for_access_token(
         expires_delta=access_token_expires,
     )
 
+    response.set_cookie(
+        key="access_token",  # 👈 쿠키의 이름
+        value=f"Bearer {access_token}",  # 👈 쿠키의 값 (Bearer 접두사 포함)
+        httponly=True,  # 👈 [중요] JavaScript에서 접근 불가
+        # secure=True,  # 👈 (운영 환경) HTTPS에서만 전송
+        # samesite="strict",  # 👈 (운영 환경) CSRF 방어
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 👈 쿠키 만료 시간 (초 단위)
+    )
+
     # 7. 토큰 반환
-    return {"access_token": access_token, "token_type": "Bearer"}
+    return {"message": "Login successful"}
+
+
+@auth_router.post("/logout", response_model=Dict[str, str])
+async def logout(response: Response):
+    response.set_cookie(
+        key="access_token",
+        value="",  # 👈 값을 비움
+        httponly=True,
+        # secure=True,
+        # samesite="strict",
+        samesite="lax",
+        max_age=0,  # 👈 즉시 만료
+    )
+
+    return {"message": "Logout successful"}
+
+
+@auth_router.get("/me", response_model=UserOut)
+async def read_users_me(
+    # [2] 이 의존성이 쿠키를 검사합니다.
+    current_user: UserOut = Depends(get_current_user_from_cookie),
+):
+    return current_user
