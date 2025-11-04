@@ -1,6 +1,8 @@
+from datetime import datetime
 from fastapi import HTTPException
 from bson import ObjectId
 from bson.errors import InvalidId
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..deps import DbDep
@@ -9,8 +11,10 @@ from .model import ResponseSegment, RequestSegment
 
 class SegmentService:
     def __init__(self, db: DbDep):
+        self.db = db
         self.collection_name = "projects"
         self.collection = db.get_collection(self.collection_name)
+        self.segment_collection = db.get_collection("segments")
         self.projection = {
             "segments": 1,
             "editor_id": 1,
@@ -20,13 +24,41 @@ class SegmentService:
             "video_source": 1,
         }
 
+    async def insert_segments_from_metadata(
+        self,
+        project_id: str | ObjectId,
+        segments_meta: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        project_oid = self._as_object_id(str(project_id))
+        now = datetime.now()
+        docs: list[dict[str, Any]] = []
+
+        for index, raw in enumerate(segments_meta or []):
+            normalized = self._normalize_segment_for_store(raw or {}, index=index)
+            normalized.update(
+                {
+                    "project_id": project_oid,
+                    "segment_index": index,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+            docs.append(normalized)
+
+        if docs:
+            await self.segment_collection.insert_many(docs)
+
+        return docs
+
     async def find_all_segment(self, project_id: Optional[str] = None):
         query: Dict[str, Any] = {}
         if project_id:
             object_id = self._as_object_id(project_id)
             query["_id"] = object_id
 
-        project_docs = await self.collection.find(query, self.projection).to_list(length=None)
+        project_docs = await self.collection.find(query, self.projection).to_list(
+            length=None
+        )
 
         all_segments: List[ResponseSegment] = []
 
@@ -90,3 +122,83 @@ class SegmentService:
             {"_id": project_object_id},
             {"$set": set_fields},
         )
+
+    async def insert_segments_from_metadata(
+        self,
+        project_id: str,
+        segments_meta: List[dict[str, Any]] | None,
+    ) -> List[dict[str, Any]]:
+        project_oid = self._as_object_id(project_id)
+        if not segments_meta:
+            return []
+
+        now = datetime.now()
+        docs: List[dict[str, Any]] = []
+
+        for index, raw in enumerate(segments_meta):
+            raw = raw or {}
+            normalized = self._normalize_segment_for_store(raw, index=index)
+            normalized.update(
+                {
+                    "project_id": project_oid,
+                    "segment_index": index,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+            docs.append(normalized)
+
+        if docs:
+            await self.segment_collection.insert_many(docs)
+
+        return docs
+
+    def _normalize_segment_for_store(
+        self,
+        segment: dict[str, Any],
+        *,
+        index: int,
+    ) -> dict[str, Any]:
+        def _float_or_none(value: Any) -> float | None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        segment_id = segment.get("segment_id")
+        try:
+            segment_oid = ObjectId(segment_id)
+        except (InvalidId, TypeError):
+            segment_oid = ObjectId()
+
+        issues = segment.get("issues") or []
+        if not isinstance(issues, list):
+            issues = [issues]
+
+        normalized: dict[str, Any] = {
+            "segment_id": segment_oid,
+            "segment_text": segment.get("segment_text", ""),
+            "translate_context": segment.get("translate_context", ""),
+            "score": segment.get("score"),
+            "editor_id": segment.get("editor_id"),
+            "sub_langth": _float_or_none(segment.get("sub_langth")),
+            "start_point": _float_or_none(segment.get("start_point")) or 0.0,
+            "end_point": _float_or_none(segment.get("end_point")) or 0.0,
+            "issues": issues,
+            "order": segment.get("order", index),
+        }
+
+        assets = segment.get("assets")
+        if isinstance(assets, dict):
+            normalized["assets"] = assets
+
+        for key in ("source_key", "bgm_key", "tts_key", "mix_key", "video_key"):
+            value = segment.get(key)
+            if value:
+                normalized[key] = value
+
+        return normalized
+
+
+async def insert_segments_by_meta(db: DbDep, metadata, project_id: str):
+    pass

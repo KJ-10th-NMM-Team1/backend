@@ -351,13 +351,13 @@ async def update_job_status(
         if result_key_meta:
             project_updates["segment_result_key"] = result_key_meta
 
-        if metadata.get("stage") == "segment_tts_completed":
-            segment_patch = metadata.get("segment")
-            if isinstance(segment_patch, dict):
-                field_updates = _build_segment_field_updates(segment_patch)
-                if field_updates:
-                    project_updates.update(field_updates)
-                    project_updates["segments_updated_at"] = now
+        # if metadata.get("stage") == "segment_tts_completed":
+        #     segment_patch = metadata.get("segment")
+        #     if isinstance(segment_patch, dict):
+        #         field_updates = _build_segment_field_updates(segment_patch)
+        #         if field_updates:
+        #             project_updates.update(field_updates)
+        #             project_updates["segments_updated_at"] = now
 
     if payload.status:
         project_updates.setdefault("status", payload.status)

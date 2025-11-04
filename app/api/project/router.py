@@ -58,7 +58,7 @@ async def get_project(project_id: str, db: DbDep) -> ProjectOut:
     segments = (
         await db["segments"]
         .find({"project_id": project_oid})
-        .sort("order", 1)
+        .sort("segment_index", 1)
         .to_list(length=None)
     )
     segment_ids = [seg["_id"] for seg in segments]

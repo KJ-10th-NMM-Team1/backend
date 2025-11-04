@@ -8,6 +8,7 @@ from ..pipeline.service import update_pipeline_stage
 from ..pipeline.models import PipelineUpdate, PipelineStatus
 from ..translate.service import suggestion_by_project
 from app.api.pipeline.router import project_channels
+from ..segment.segment_service import SegmentService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -37,15 +38,8 @@ async def update_pipeline(db, project_id, payload):
     await dispatch_pipeline(project_id, payload)
 
 
-async def mt_complete_processing(db, project_id, update_payload):
-    update_payload.update(
-        stage_id="mt",
-        progress=100,
-        status=PipelineStatus.COMPLETED,
-    )
-    await update_pipeline(db, project_id, update_payload)
-
-    # rag processing
+async def pretts_complete_processing(db, project_id, segments):
+    # rag processing - 0
     rag_payload = {
         "project_id": project_id,
         "stage_id": "rag",
@@ -54,6 +48,20 @@ async def mt_complete_processing(db, project_id, update_payload):
     }
     await update_pipeline(db, project_id, rag_payload)
 
+    # 세그먼트 Insert_many
+    segment_service = SegmentService(db)
+    await segment_service.insert_segments_from_metadata(project_id, segments)
+
+    # rag processing - 50
+    rag_payload = {
+        "project_id": project_id,
+        "stage_id": "rag",
+        "status": PipelineStatus.PROCESSING,
+        "progress": 50,
+    }
+    await update_pipeline(db, project_id, rag_payload)
+
+    # rag 실행
     try:
         # project_id의 세그먼트에 대해 이슈생성
         await suggestion_by_project(db, project_id)
@@ -73,6 +81,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
     # job 상태 업데이트
     result = await update_job_status(db, job_id, payload)
 
+    metadata = None
     if payload.metadata is not None:
         if payload.metadata is not None:
             metadata = (
@@ -111,13 +120,20 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=0,
         )
     elif stage == "mt_completed":  # mt 완료
-        update_payload = await mt_complete_processing(db, project_id, update_payload)
-    elif stage == "tts_prepare":
+        update_payload.update(
+            stage_id="mt",
+            progress=100,
+            status=PipelineStatus.COMPLETED,
+        )
+    elif stage == "tts_completed":  # pre-tts 완료
+        segments = metadata.get("segments", [])
+        update_payload = await pretts_complete_processing(db, project_id, segments)
+    elif stage == "tts2_prepare":  # tts2: 최종 tts
         update_payload.update(
             stage_id="tts",
             progress=0,
         )
-    elif stage == "tts_completed":  # tts 완료
+    elif stage == "tts2_completed":
         update_payload.update(
             stage_id="tts",
             progress=100,
