@@ -98,12 +98,14 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
         "project_id": project_id,
         "status": PipelineStatus.PROCESSING,
     }
-
-    if stage == "downloaded":
+    # stage별, project 파이프라인 업데이트
+    if stage == "downloaded":  # s3에서 불러오기 완료 (stt 시작)
         update_payload.update(stage_id="stt", progress=0)
     elif stage == "stt_completed":
         update_payload.update(
-            stage_id="stt", progress=100, status=PipelineStatus.COMPLETED
+            stage_id="stt",
+            progress=100,
+            status=PipelineStatus.COMPLETED,
         )
     elif stage == "mt_prepare":
         update_payload.update(
@@ -111,20 +113,13 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=0,
         )
     elif stage == "mt_completed":  # mt 완료
-        update_payload.update(
-            stage_id="mt",
-            progress=100,
-            status=PipelineStatus.COMPLETED,
-        )
-    elif stage == "tts_completed":  # pre-tts 완료
-        segments = metadata.get("segments", [])
-        update_payload = await pretts_complete_processing(db, project_id, segments)
-    elif stage == "tts2_prepare":  # tts2: 최종 tts
+        update_payload = await mt_complete_processing(db, project_id, update_payload)
+    elif stage == "tts_prepare":
         update_payload.update(
             stage_id="tts",
             progress=0,
         )
-    elif stage == "tts2_completed":
+    elif stage == "tts_completed":  # tts 완료
         update_payload.update(
             stage_id="tts",
             progress=100,
