@@ -2,7 +2,6 @@ from datetime import datetime
 from fastapi import HTTPException
 from bson import ObjectId
 from bson.errors import InvalidId
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..deps import DbDep
@@ -123,36 +122,6 @@ class SegmentService:
             {"$set": set_fields},
         )
 
-    async def insert_segments_from_metadata(
-        self,
-        project_id: str,
-        segments_meta: List[dict[str, Any]] | None,
-    ) -> List[dict[str, Any]]:
-        project_oid = self._as_object_id(project_id)
-        if not segments_meta:
-            return []
-
-        now = datetime.now()
-        docs: List[dict[str, Any]] = []
-
-        for index, raw in enumerate(segments_meta):
-            raw = raw or {}
-            normalized = self._normalize_segment_for_store(raw, index=index)
-            normalized.update(
-                {
-                    "project_id": project_oid,
-                    "segment_index": index,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            )
-            docs.append(normalized)
-
-        if docs:
-            await self.segment_collection.insert_many(docs)
-
-        return docs
-
     def _normalize_segment_for_store(
         self,
         segment: dict[str, Any],
@@ -198,7 +167,3 @@ class SegmentService:
                 normalized[key] = value
 
         return normalized
-
-
-async def insert_segments_by_meta(db: DbDep, metadata, project_id: str):
-    pass
