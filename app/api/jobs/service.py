@@ -397,7 +397,7 @@ async def mark_job_failed(
     return await update_job_status(db, job_id, payload, message=message)
 
 
-async def enqueue_job(job: JobRead) -> None:
+async def enqueue_job(job: JobRead, voice_config: Optional[dict] = None) -> None:
     if not JOB_QUEUE_URL:
         if APP_ENV in {"dev", "development", "local"}:
             logger.warning(
@@ -411,9 +411,10 @@ async def enqueue_job(job: JobRead) -> None:
             detail="JOB_QUEUE_URL env not set",
         )
 
-    message_body = json.dumps(
-        _build_job_message(job),
-    )
+    message_payload = _build_job_message(job)
+    if voice_config:
+        message_payload["voice_config"] = voice_config
+    message_body = json.dumps(message_payload)
 
     message_kwargs: dict[str, Any] = {
         "QueueUrl": JOB_QUEUE_URL,
@@ -453,8 +454,21 @@ async def start_job(project: ProjectPublic, db: DbDep):
     )
     job = await create_job(db, job_payload, job_oid=job_oid)
 
+    # 프로젝트의 보이스 설정 조회
+    voice_config = None
     try:
-        await enqueue_job(job)
+        project_doc = await db["projects"].find_one(
+            {"_id": ObjectId(project.project_id)}
+        )
+        if project_doc and "voice_config" in project_doc:
+            voice_config = project_doc["voice_config"]
+    except Exception as exc:
+        logger.warning(
+            "Failed to load voice_config for project %s: %s", project.project_id, exc
+        )
+
+    try:
+        await enqueue_job(job, voice_config=voice_config)
     except SqsPublishError as exc:
         await mark_job_failed(
             db,

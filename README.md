@@ -4,6 +4,7 @@
 - PR 올릴시, 한명의 리뷰자를 선택할 것!
 
 # 폴더 구조
+
 middleware - 미들웨어 설정 파일 모음
 service - 비지니스로직 모음
 router - api 모음
@@ -11,6 +12,7 @@ model - db와 연동될 객체 모음
 config - 설정 파일 모음
 
 # Docker 기반 개발 환경
+
 - VS Code에서 저장소 루트(backend)를 열어 작업하세요.
 - 사전 준비: Dev Containers 확장이 설치된 VS Code가 필요합니다.
 - 컨테이너 실행: Ctrl + Shift + P → Dev Containers: Rebuild and Reopen in Container를 선택하세요.
@@ -18,6 +20,7 @@ config - 설정 파일 모음
 - 서버 중지: 실행 중인 터미널에서 Ctrl + C를 누르면 종료됩니다.
 
 ## .env파일
+
 ```env
 # CORS: 리액트 개발 서버 허용
 CORS_ORIGINS=http://localhost:5173
@@ -49,6 +52,7 @@ $ docker-compose down -v --rmi all # 볼륨, 네트워크 이미지 전부 삭�
 $ docker-compose up -d # 도커 설치 명령어
 $ docker exec -it dupilot-backend bash # 백엔드 컨테이너 들어가기(종료는 exit, Ctrl + D)
 $ docker exec -it dupilot-mongo bash #몽고DB 컨테이너 들어가기(종료는 exit, Ctrl + D)
+$ docker compose exec api bash -lc "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload" # 바로 시작
 ```
 
 > Dev Containers: Rebuild and Reopen in Container
@@ -58,4 +62,3 @@ MongoDB: mongodb://localhost:27018
 중지 및 정리: docker compose down으로 컨테이너만 중지/삭제하며 데이터는 유지됩니다.
 로그 확인/디버깅: docker compose logs -f api 또는 docker compose logs mongo
 프로덕션 모드 전환: .env 파일에서 APP_ENV=prod로 변경합니다.
-
