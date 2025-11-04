@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field, ConfigDict
 
 JobStatus = Literal["queued", "in_progress", "done", "failed"]
 
@@ -40,6 +40,8 @@ class JobRead(BaseModel):
 
 
 class JobUpdateMetadata(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     stage: Literal[
         "downloaded",
         "stt_completed",
@@ -47,14 +49,20 @@ class JobUpdateMetadata(BaseModel):
         "mt_completed",
         "tts_prepare",
         "tts_completed",
+        "completed",
+        "segment_tts_started",
+        "segment_tts_completed",
+        "segment_mix_started",
+        "segment_mix_completed",
+        "failed",
     ]
-    segments_count: int
-    metadata_key: str
-    result_key: str
-    target_lang: str
-    source_lang: str
-    input_key: str
-    segment_assets_prefix: str
+    segments_count: int | None = None
+    metadata_key: str | None = None
+    result_key: str | None = None
+    target_lang: str | None = None
+    source_lang: str | None = None
+    input_key: str | None = None
+    segment_assets_prefix: str | None = None
     segments: Optional[list[dict[str, Any]]] = None
 
 
@@ -63,4 +71,4 @@ class JobUpdateStatus(BaseModel):
     result_key: str | None = None
     error: str | None = None
     message: str | None = None
-    metadata: JobUpdateMetadata | None = None
+    metadata: JobUpdateMetadata | dict[str, Any] | None = None
