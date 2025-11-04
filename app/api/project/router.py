@@ -32,14 +32,47 @@ async def list_my_projects(
     db: DbDep,
     current_user: UserOut = Depends(get_current_user_from_cookie),
 ) -> List[ProjectOut]:
-    docs = (
+    projects  = (
         await db["projects"]
         .find({"owner_code": current_user.id})
         .sort("created_at", -1)
         .to_list(length=None)
     )
-    return [ProjectOut.model_validate(doc) for doc in docs]
+    project_ids = [doc["_id"] for doc in projects]
 
+    pipeline = [
+        {"$match": {"project_id": {"$in": project_ids}}},
+        {
+            "$lookup": {
+                "from": "issues",
+                "let": {"segmentId": "$_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$segment_id", "$$segmentId"]}}},
+                    {"$count": "count"},
+                ],
+                "as": "issue_docs",
+            }
+        },
+        {
+            "$addFields": {
+                "issue_count": {"$ifNull": [{"$first": "$issue_docs.count"}, 0]}
+            }
+        },
+        {
+            "$group": {
+                "_id": "$project_id",
+                "issue_count": {"$sum": "$issue_count"},
+            }
+        },
+    ]
+    issue_counts = await db["segments"].aggregate(pipeline).to_list(length=None)
+    issue_map = {row["_id"]: row["issue_count"] for row in issue_counts}
+
+    result = []
+    for doc in projects:
+        doc["issue_count"] = issue_map.get(doc["_id"], 0)
+        result.append(ProjectOut.model_validate(doc))
+    return result
 
 @project_router.get("/", response_model=List[ProjectOut], summary="프로젝트 전체 목록")
 async def list_projects(db: DbDep) -> List[ProjectOut]:
