@@ -142,6 +142,7 @@ async def _create_default_pipeline(db: DbDep, project_id: str) -> Dict[str, Any]
         {"id": "stt", "status": "pending", "progress": 0, "started_at": now},
         {"id": "mt", "status": "pending", "progress": 0},
         {"id": "rag", "status": "pending", "progress": 0},
+        {"id": "voice_mapping", "status": "pending", "progress": 0},
         {"id": "tts", "status": "pending", "progress": 0},
         {"id": "packaging", "status": "pending", "progress": 0},
         {"id": "outputs", "status": "pending", "progress": 0},
