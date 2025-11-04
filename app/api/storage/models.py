@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class PresignRequest(BaseModel):
     filename: str
     content_type: str
+    owner_code: str
 
 
 class UploadFinalize(BaseModel):
