@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import HTTPException
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -12,6 +13,7 @@ class SegmentService:
         self.db = db
         self.collection_name = "projects"
         self.collection = db.get_collection(self.collection_name)
+        self.segment_collection = db.get_collection("segments")
         self.projection = {
             "segments": 1,
             "editor_id": 1,
@@ -29,16 +31,31 @@ class SegmentService:
         result = await collection.insert_one(doc)
         return str(result.inserted_id)
 
-    async def find_segment(self, project_id: str, db_name: str = "segments"):
-        collection = self.db.get_collection(db_name)
-        docs = await collection.find({"_id": ObjectId(project_id)}).to_list(length=None)
-        result: List[ResponseSegment] = []
+    async def insert_segments_from_metadata(
+        self,
+        project_id: str | ObjectId,
+        segments_meta: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        project_oid = self._as_object_id(str(project_id))
+        now = datetime.now()
+        docs: list[dict[str, Any]] = []
 
-        for doc in docs:
-            doc["project_id"] = project_id
-            result.append(ResponseSegment(**doc))
+        for index, raw in enumerate(segments_meta or []):
+            normalized = self._normalize_segment_for_store(raw or {}, index=index)
+            normalized.update(
+                {
+                    "project_id": project_oid,
+                    "segment_index": index,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+            docs.append(normalized)
 
-        return result
+        if docs:
+            await self.segment_collection.insert_many(docs)
+
+        return docs
 
     async def find_all_segment(self, project_id: Optional[str] = None):
         query: Dict[str, Any] = {}
@@ -112,3 +129,49 @@ class SegmentService:
             {"_id": project_object_id},
             {"$set": set_fields},
         )
+
+    def _normalize_segment_for_store(
+        self,
+        segment: dict[str, Any],
+        *,
+        index: int,
+    ) -> dict[str, Any]:
+        def _float_or_none(value: Any) -> float | None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        segment_id = segment.get("seg_id")
+        try:
+            segment_oid = ObjectId(segment_id)
+        except (InvalidId, TypeError):
+            segment_oid = ObjectId()
+
+        issues = segment.get("issues") or []
+        if not isinstance(issues, list):
+            issues = [issues]
+
+        normalized: dict[str, Any] = {
+            "segment_id": segment_oid,
+            "segment_text": segment.get("seg_txt", ""),
+            "translate_context": segment.get("trans_txt", ""),
+            "score": segment.get("score"),
+            "editor_id": segment.get("editor_id"),
+            "start_point": _float_or_none(segment.get("start")) or 0.0,
+            "end_point": _float_or_none(segment.get("end")) or 0.0,
+            "issues": issues,
+            "sub_langth": _float_or_none(segment.get("sub_langth")),
+            # "order": segment.get("order", index),
+        }
+
+        assets = segment.get("assets")
+        if isinstance(assets, dict):
+            normalized["assets"] = assets
+
+        for key in ("source_key", "bgm_key", "tts_key", "mix_key", "video_key"):
+            value = segment.get(key)
+            if value:
+                normalized[key] = value
+
+        return normalized

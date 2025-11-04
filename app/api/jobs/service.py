@@ -132,9 +132,7 @@ def _resolve_callback_base() -> str:
     if app_env in {"dev", "development", "local"}:
         return "http://localhost:8000"
 
-    raise HTTPException(
-        status_code=500, detail="JOB_CALLBACK_BASE_URL env not set"
-    )
+    raise HTTPException(status_code=500, detail="JOB_CALLBACK_BASE_URL env not set")
 
 
 def _collect_segment_assets(segment: dict[str, Any]) -> dict[str, Any]:
@@ -286,7 +284,7 @@ async def update_job_status(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid job_id"
         ) from exc
 
-    now = datetime.utcnow()
+    now = datetime.now()
     update_operations: dict[str, Any] = {
         "$set": {
             "status": payload.status,
@@ -307,8 +305,8 @@ async def update_job_status(
     if payload.error is not None:
         update_operations["$set"]["error"] = payload.error
 
-    if payload.metadata is not None:
-        update_operations["$set"]["metadata"] = payload.metadata.model_dump()
+    # if payload.metadata is not None:
+    #     update_operations["$set"]["metadata"] = payload.metadata.model_dump()
 
     updated = await db[JOB_COLLECTION].find_one_and_update(
         {"_id": job_oid},
@@ -324,14 +322,14 @@ async def update_job_status(
     project_updates: dict[str, Any] = {}
     metadata = payload.metadata if isinstance(payload.metadata, dict) else None
     if metadata:
-        segments_meta = metadata.get("segments")
-        if isinstance(segments_meta, list):
-            normalized_segments = [
-                _normalize_segment_record(seg if isinstance(seg, dict) else {}, index=i)
-                for i, seg in enumerate(segments_meta)
-            ]
-            project_updates["segments"] = normalized_segments
-            project_updates["segments_updated_at"] = now
+        # segments_meta = metadata.get("segments")
+        # if isinstance(segments_meta, list):
+        #     normalized_segments = [
+        #         _normalize_segment_record(seg if isinstance(seg, dict) else {}, index=i)
+        #         for i, seg in enumerate(segments_meta)
+        #     ]
+        #     project_updates["segments"] = normalized_segments
+        #     project_updates["segments_updated_at"] = now
 
         assets_prefix = metadata.get("segment_assets_prefix")
         if assets_prefix:
@@ -353,13 +351,13 @@ async def update_job_status(
         if result_key_meta:
             project_updates["segment_result_key"] = result_key_meta
 
-        if metadata.get("stage") == "segment_tts_completed":
-            segment_patch = metadata.get("segment")
-            if isinstance(segment_patch, dict):
-                field_updates = _build_segment_field_updates(segment_patch)
-                if field_updates:
-                    project_updates.update(field_updates)
-                    project_updates["segments_updated_at"] = now
+        # if metadata.get("stage") == "segment_tts_completed":
+        #     segment_patch = metadata.get("segment")
+        #     if isinstance(segment_patch, dict):
+        #         field_updates = _build_segment_field_updates(segment_patch)
+        #         if field_updates:
+        #             project_updates.update(field_updates)
+        #             project_updates["segments_updated_at"] = now
 
     if payload.status:
         project_updates.setdefault("status", payload.status)
