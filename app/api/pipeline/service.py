@@ -107,6 +107,17 @@ async def update_pipeline_stage(
             },
         )
 
+        # 프로젝트 업데이트
+        await db["projects"].update_one(
+            {"project_id": project_id},
+            {
+                "$set": {
+                    "status": current_stage,
+                    "progress": overall_progress,
+                    "updated_at": now,
+                }
+            },
+        )
         return {"success": True}
 
     except PyMongoError as exc:
