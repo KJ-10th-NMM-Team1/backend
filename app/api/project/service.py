@@ -31,8 +31,41 @@ async def get_project_paging(
         .to_list(length=limit)
     )
 
+    project_ids = [doc["_id"] for doc in docs]
+
+    pipeline = [
+        {"$match": {"project_id": {"$in": project_ids}}},
+        {
+            "$lookup": {
+                "from": "issues",
+                "let": {"segmentId": "$_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$segment_id", "$$segmentId"]}}},
+                    {"$count": "count"},
+                ],
+                "as": "issue_docs",
+            }
+        },
+        {
+            "$addFields": {
+                "issue_count": {"$ifNull": [{"$first": "$issue_docs.count"}, 0]}
+            }
+        },
+        {
+            "$group": {
+                "_id": "$project_id",
+                "issue_count": {"$sum": "$issue_count"},
+            }
+        },
+    ]
+    issue_counts = await db["segments"].aggregate(pipeline).to_list(length=None)
+    issue_map = {row["_id"]: row["issue_count"] for row in issue_counts}
+
+    result = []
     for doc in docs:
-        doc["project_id"] = str(doc["_id"])
+        doc["issue_count"] = issue_map.get(doc["_id"], 0)
+        result.append(ProjectOut.model_validate(doc))
+    return result
 
     return [ProjectOut.model_validate(doc) for doc in docs]
 
