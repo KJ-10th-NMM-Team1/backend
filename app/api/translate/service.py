@@ -87,7 +87,7 @@ async def suggestion_by_project(db, project_id: str):
 async def glosary_suggestion(db: DbDep, segment_oid: str):
     segment = await db["segments"].find_one({"_id": segment_oid})
     source_text = (segment.get("segment_text") or "").strip()
-    translated_text = (segment.get("translate_text") or "").strip()
+    translated_text = (segment.get("translate_context") or "").strip()
 
     if not source_text or not translated_text:
         raise HTTPException(
@@ -104,7 +104,6 @@ async def glosary_suggestion(db: DbDep, segment_oid: str):
         source_text=source_text, draft_translation=translated_text
     )
     review["checked_at"] = datetime.now().isoformat() + "Z"
-    print(review)
 
     await db["issues"].insert_one(
         {
