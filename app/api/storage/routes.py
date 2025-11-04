@@ -58,6 +58,17 @@ async def fin_upload(payload: UploadFinalize, db: DbDep):
         video_source=payload.object_key,
     )
     result = await update_project(db, update_payload)
+
+    await update_pipeline_stage(
+        db,
+        PipelineUpdate(
+            project_id=payload.project_id,
+            stage_id="upload",
+            status=PipelineStatus.COMPLETED,
+            progress=100,
+        ),
+    )
+
     await start_job(result, db)
     await update_pipeline_stage(
         db,

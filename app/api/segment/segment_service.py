@@ -23,7 +23,7 @@ class SegmentService:
             "video_source": 1,
         }
 
-    async def save_segment(self, request: RequestSegment, db_name: str):
+    async def test_save_segment(self, request: RequestSegment, db_name: str):
         project_oid = ObjectId(request.project_id)
         collection = self.db.get_collection(db_name)
         doc = request.model_dump(by_alias=True)

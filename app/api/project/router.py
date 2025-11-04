@@ -9,6 +9,17 @@ from .models import ProjectOut
 from app.api.auth.model import UserOut
 from app.api.auth.service import get_current_user_from_cookie
 
+
+def _serialize(value: Any) -> Any:
+    if isinstance(value, ObjectId):
+        return str(value)
+    if isinstance(value, list):
+        return [_serialize(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _serialize(item) for key, item in value.items()}
+    return value
+
+
 project_router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
@@ -49,6 +60,7 @@ async def get_project(project_id: str, db: DbDep) -> ProjectOut:
             detail="Invalid project_id",
         ) from exc
 
+    print(project_oid)
     project = await db["projects"].find_one({"_id": project_oid})
     if not project:
         raise HTTPException(
@@ -77,6 +89,7 @@ async def get_project(project_id: str, db: DbDep) -> ProjectOut:
     for segment in segments:
         seg_id = segment["_id"]
         segment["issues"] = issues_by_segment.get(seg_id, [])
-
     project["segments"] = segments
-    return ProjectOut.model_validate(project)
+    serialized = _serialize(project)
+
+    return ProjectOut.model_validate(serialized)

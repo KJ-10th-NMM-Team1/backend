@@ -39,7 +39,7 @@ async def segment_test_save(
     request: RequestSegment, segment_service: SegmentService = Depends(SegmentService)
 ):
     try:
-        return await segment_service.save_segment(request, db_name="segments")
+        return await segment_service.test_save_segment(request, db_name="segments")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

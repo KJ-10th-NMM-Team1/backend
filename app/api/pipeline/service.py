@@ -49,7 +49,6 @@ async def update_pipeline_stage(
     try:
         project_id = payload.project_id
         stage_id = payload.stage_id
-
         # 파이프라인 문서 조회
         pipeline_doc = await db["pipelines"].find_one({"project_id": project_id})
         if not pipeline_doc:
@@ -68,7 +67,6 @@ async def update_pipeline_stage(
                     stage["progress"] = payload.progress
                 if payload.error:
                     stage["error"] = payload.error
-
                 # 상태에 따른 타임스탬프 업데이트
                 now = datetime.now()
                 if payload.status == PipelineStatus.PROCESSING:
@@ -142,6 +140,7 @@ async def _create_default_pipeline(db: DbDep, project_id: str) -> Dict[str, Any]
         {"id": "stt", "status": "pending", "progress": 0, "started_at": now},
         {"id": "mt", "status": "pending", "progress": 0},
         {"id": "rag", "status": "pending", "progress": 0},
+        {"id": "voice_mapping", "status": "pending", "progress": 0},
         {"id": "tts", "status": "pending", "progress": 0},
         {"id": "packaging", "status": "pending", "progress": 0},
         {"id": "outputs", "status": "pending", "progress": 0},
@@ -188,7 +187,6 @@ def _get_current_stage(stages: list) -> str:
     for stage in stages:
         if stage["status"] in ["processing", "review"]:
             return stage["id"]
-
     # 진행 중인 단계가 없으면 첫 번째 pending 단계
     for stage in stages:
         if stage["status"] == "pending":
