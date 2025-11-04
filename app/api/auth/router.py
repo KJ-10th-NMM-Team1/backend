@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from datetime import timedelta
-from .model import UserCreate, UserOut, UserLogin
+from .model import UserCreate, UserOut, UserLogin, GoogleLogin
 from typing import Dict, Any
 from .service import AuthService, get_current_user_from_cookie
 from ...config.env import ACCESS_TOKEN_EXPIRE_MINUTES
@@ -77,3 +77,30 @@ async def read_users_me(
     current_user: UserOut = Depends(get_current_user_from_cookie),
 ):
     return current_user
+
+
+@auth_router.post(
+    "/google/login", response_model=Dict[str, Any], status_code=status.HTTP_200_OK
+)
+async def login_with_google(
+    response: Response,
+    payload: GoogleLogin,
+    auth_service: AuthService = Depends(AuthService),
+) -> Dict[str, Any]:
+    user = await auth_service.login_with_google(payload.id_token)
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth_service.create_access_token(
+        data={"sub": user["email"]},
+        expires_delta=access_token_expires,
+    )
+
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+    return {"message": "Login successful", "user": UserOut(**user)}

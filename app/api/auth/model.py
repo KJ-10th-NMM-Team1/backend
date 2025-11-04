@@ -29,6 +29,10 @@ class UserLogin(BaseModel):
     password: str
 
 
+class GoogleLogin(BaseModel):
+    id_token: str = Field(..., description="Google ID token received from client")
+
+
 class UserOut(BaseModel):
     id: PyObjectId = Field(alias="_id")
     username: str
