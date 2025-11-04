@@ -134,7 +134,7 @@ class SegmentService:
             except (TypeError, ValueError):
                 return None
 
-        segment_id = segment.get("segment_id")
+        segment_id = segment.get("seg_id")
         try:
             segment_oid = ObjectId(segment_id)
         except (InvalidId, TypeError):
@@ -146,15 +146,15 @@ class SegmentService:
 
         normalized: dict[str, Any] = {
             "segment_id": segment_oid,
-            "segment_text": segment.get("segment_text", ""),
-            "translate_context": segment.get("translate_context", ""),
+            "segment_text": segment.get("seg_txt", ""),
+            "translate_context": segment.get("trans_txt", ""),
             "score": segment.get("score"),
             "editor_id": segment.get("editor_id"),
-            "sub_langth": _float_or_none(segment.get("sub_langth")),
-            "start_point": _float_or_none(segment.get("start_point")) or 0.0,
-            "end_point": _float_or_none(segment.get("end_point")) or 0.0,
+            "start_point": _float_or_none(segment.get("start")) or 0.0,
+            "end_point": _float_or_none(segment.get("end")) or 0.0,
             "issues": issues,
-            "order": segment.get("order", index),
+            "sub_langth": _float_or_none(segment.get("sub_langth")),
+            # "order": segment.get("order", index),
         }
 
         assets = segment.get("assets")
