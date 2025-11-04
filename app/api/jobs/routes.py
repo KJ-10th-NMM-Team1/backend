@@ -8,6 +8,7 @@ from ..pipeline.service import update_pipeline_stage
 from ..pipeline.models import PipelineUpdate, PipelineStatus
 from ..translate.service import suggestion_by_project
 from app.api.pipeline.router import project_channels
+from ..segment.segment_service import SegmentService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -17,17 +18,77 @@ async def read_job(job_id: str, db: DbDep) -> JobRead:
     return await get_job(db, job_id)
 
 
+async def dispatch_pipeline(project_id: str, update_payload):
+    listeners = project_channels.get(project_id, set())
+    event = {
+        "project_id": project_id,
+        "stage": update_payload.get("stage_id"),
+        "status": update_payload.get("status", PipelineStatus.PROCESSING).value,
+        "progress": update_payload.get("progress"),
+        "timestamp": datetime.now().isoformat() + "Z",
+    }
+    for queue in list(listeners):
+        await queue.put(event)
+
+
+async def update_pipeline(db, project_id, payload):
+    # 파이프라인 디비 수정
+    await update_pipeline_stage(db, PipelineUpdate(**payload))
+    # 파이프라인 SSE 큐에 추가
+    await dispatch_pipeline(project_id, payload)
+
+
+async def pretts_complete_processing(db, project_id, segments):
+    # rag processing - 0
+    rag_payload = {
+        "project_id": project_id,
+        "stage_id": "rag",
+        "status": PipelineStatus.PROCESSING,
+        "progress": 0,
+    }
+    await update_pipeline(db, project_id, rag_payload)
+
+    # 세그먼트 Insert_many
+    segment_service = SegmentService(db)
+    await segment_service.insert_segments_from_metadata(project_id, segments)
+
+    # rag processing - 50
+    rag_payload = {
+        "project_id": project_id,
+        "stage_id": "rag",
+        "status": PipelineStatus.PROCESSING,
+        "progress": 50,
+    }
+    await update_pipeline(db, project_id, rag_payload)
+
+    # rag 실행
+    try:
+        # project_id의 세그먼트에 대해 이슈생성
+        await suggestion_by_project(db, project_id)
+    except Exception:
+        rag_payload["status"] = PipelineStatus.FAILED
+        rag_payload["progress"] = 0
+        await update_pipeline(db, project_id, rag_payload)
+        raise
+    else:
+        rag_payload["status"] = PipelineStatus.COMPLETED
+        rag_payload["progress"] = 100
+    return rag_payload
+
+
 @router.post("/{job_id}/status", response_model=JobRead)
 async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> JobRead:
     # job 상태 업데이트
     result = await update_job_status(db, job_id, payload)
 
+    metadata = None
     if payload.metadata is not None:
-        metadata = (
-            payload.metadata.model_dump()
-            if hasattr(payload.metadata, "model_dump")
-            else payload.metadata
-        )
+        if payload.metadata is not None:
+            metadata = (
+                payload.metadata.model_dump()
+                if hasattr(payload.metadata, "model_dump")
+                else payload.metadata
+            )
 
     # state 없을 때 리턴
     if not metadata or "stage" not in metadata:
@@ -64,33 +125,21 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=100,
             status=PipelineStatus.COMPLETED,
         )
-        # project의 세그먼트들에 이슈생성
-        await suggestion_by_project(db, project_id)
-
-    elif stage == "tts_prepare":
+    elif stage == "tts_completed":  # pre-tts 완료
+        segments = metadata.get("segments", [])
+        update_payload = await pretts_complete_processing(db, project_id, segments)
+    elif stage == "tts2_prepare":  # tts2: 최종 tts
         update_payload.update(
             stage_id="tts",
             progress=0,
         )
-    elif stage == "tts_completed":  # tts 완료
+    elif stage == "tts2_completed":
         update_payload.update(
             stage_id="tts",
             progress=100,
             status=PipelineStatus.COMPLETED,
         )
 
-    # 파이프라인 디비 수정
-    await update_pipeline_stage(db, PipelineUpdate(**update_payload))
+    await update_pipeline(db, project_id, update_payload)
 
-    # 파이프라인
-    listeners = project_channels.get(project_id, set())
-    event = {
-        "project_id": project_id,
-        "stage": update_payload.get("stage_id"),
-        "status": update_payload.get("status", PipelineStatus.PROCESSING).value,
-        "progress": update_payload.get("progress"),
-        "timestamp": datetime.now().isoformat() + "Z",
-    }
-    for queue in list(listeners):
-        await queue.put(event)
     return result

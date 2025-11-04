@@ -40,7 +40,6 @@ class UserOut(BaseModel):
     hashed_password: str
     email: EmailStr
     createdAt: datetime
-
     model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
 
 
