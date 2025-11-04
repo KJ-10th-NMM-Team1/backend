@@ -63,6 +63,7 @@ class JobUpdateMetadata(BaseModel):
     source_lang: str | None = None
     input_key: str | None = None
     segment_assets_prefix: str | None = None
+    segments: Optional[list[dict[str, Any]]] = None
 
 
 class JobUpdateStatus(BaseModel):
