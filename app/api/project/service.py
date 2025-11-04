@@ -1,17 +1,51 @@
 from fastapi import HTTPException, status
 from datetime import datetime
 from pymongo.errors import PyMongoError
-from typing import TypedDict
+from typing import TypedDict, Optional
 from bson import ObjectId
 from bson.errors import InvalidId
 
 from ..deps import DbDep
-from ..project.models import ProjectCreate, ProjectUpdate, ProjectPublic
+from ..project.models import ProjectCreate, ProjectUpdate, ProjectPublic, ProjectOut
 from ..pipeline.service import _create_default_pipeline
 
 
 class ProjectCreateResult(TypedDict):
     project_id: str
+
+
+async def get_project_paging(
+    db: DbDep,
+    user_id: Optional[str] = None,
+    sort: str = "createdAt",
+    page: int = 1,
+    limit: int = 10,
+):
+    try:
+        skip = (page - 1) * limit
+        docs = (
+            await db["projects"]
+            .find({"owner_code": user_id})
+            .sort(sort, -1)
+            .skip(skip)
+            .limit(limit)
+            .to_list(length=limit)
+        )
+
+        for doc in docs:
+            doc["project_id"] = str(doc["_id"])
+
+        return [ProjectOut.model_validate(doc) for doc in docs]
+    except InvalidId as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid project_id",
+        ) from exc
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve projects",
+        ) from exc
 
 
 async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResult:
@@ -23,7 +57,7 @@ async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResu
         "video_source": None,
         "created_at": now,
         "updated_at": now,
-        "owner_code": payload.owner_code
+        "owner_code": payload.owner_code,
     }
 
     try:
