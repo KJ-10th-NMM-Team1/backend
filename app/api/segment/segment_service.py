@@ -23,6 +23,14 @@ class SegmentService:
             "video_source": 1,
         }
 
+    async def test_save_segment(self, request: RequestSegment, db_name: str):
+        project_oid = ObjectId(request.project_id)
+        collection = self.db.get_collection(db_name)
+        doc = request.model_dump(by_alias=True)
+        doc["_id"] = project_oid
+        result = await collection.insert_one(doc)
+        return str(result.inserted_id)
+
     async def insert_segments_from_metadata(
         self,
         project_id: str | ObjectId,

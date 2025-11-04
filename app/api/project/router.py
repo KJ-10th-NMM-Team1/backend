@@ -33,6 +33,7 @@ async def list_my_projects(
 @project_router.get("/", response_model=List[ProjectOut], summary="프로젝트 전체 목록")
 async def list_projects(db: DbDep) -> List[ProjectOut]:
     docs = await db["projects"].find().sort("created_at", -1).to_list(length=None)
+
     return [ProjectOut.model_validate(doc) for doc in docs]
 
 
