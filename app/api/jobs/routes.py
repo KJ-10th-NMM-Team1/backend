@@ -140,6 +140,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             status=PipelineStatus.COMPLETED,
         )
 
-    await update_pipeline(db, project_id, update_payload)
+    if update_payload.get("stage_id"):
+        await update_pipeline(db, project_id, update_payload)
 
     return result
