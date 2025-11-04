@@ -56,14 +56,13 @@ class JobUpdateMetadata(BaseModel):
         "segment_mix_completed",
         "failed",
     ]
-    segments_count: int
-    metadata_key: str
-    result_key: str
-    target_lang: str
-    source_lang: str
-    input_key: str
-    segment_assets_prefix: str
-    segments: Optional[list[dict[str, Any]]] = None
+    segments_count: int | None = None
+    metadata_key: str | None = None
+    result_key: str | None = None
+    target_lang: str | None = None
+    source_lang: str | None = None
+    input_key: str | None = None
+    segment_assets_prefix: str | None = None
 
 
 class JobUpdateStatus(BaseModel):
