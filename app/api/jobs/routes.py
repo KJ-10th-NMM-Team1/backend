@@ -125,21 +125,27 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=100,
             status=PipelineStatus.COMPLETED,
         )
-    elif stage == "tts_completed":  # pre-tts 완료
-        segments = metadata.get("segments", [])
-        update_payload = await pretts_complete_processing(db, project_id, segments)
-    elif stage == "tts2_prepare":  # tts2: 최종 tts
+    elif stage in {"tts_prepare", "pre_tts_prepare"}:
         update_payload.update(
             stage_id="tts",
             progress=0,
         )
-    elif stage == "tts2_completed":
-        update_payload.update(
-            stage_id="tts",
-            progress=100,
-            status=PipelineStatus.COMPLETED,
-        )
+    elif stage == "tts_completed":  # pre-tts 완료
+        segments = metadata.get("segments", [])
+        update_payload = await pretts_complete_processing(db, project_id, segments)
+    # elif stage == "tts2_prepare":  # tts2: 최종 tts
+    #     update_payload.update(
+    #         stage_id="tts",
+    #         progress=0,
+    #     )
+    # elif stage == "tts2_completed":
+    #     update_payload.update(
+    #         stage_id="tts",
+    #         progress=100,
+    #         status=PipelineStatus.COMPLETED,
+    #     )
 
-    await update_pipeline(db, project_id, update_payload)
+    if update_payload.get("stage_id"):
+        await update_pipeline(db, project_id, update_payload)
 
     return result
