@@ -39,15 +39,6 @@ async def update_pipeline(db, project_id, payload):
 
 
 async def pretts_complete_processing(db, project_id, segments):
-    # rag processing - 0
-    rag_payload = {
-        "project_id": project_id,
-        "stage_id": "rag",
-        "status": PipelineStatus.PROCESSING,
-        "progress": 0,
-    }
-    await update_pipeline(db, project_id, rag_payload)
-
     # 세그먼트 Insert_many
     segment_service = SegmentService(db)
     await segment_service.insert_segments_from_metadata(project_id, segments)
@@ -125,6 +116,14 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=100,
             status=PipelineStatus.COMPLETED,
         )
+        await update_pipeline(db, project_id, update_payload)
+
+        update_payload = {
+            "project_id": project_id,
+            "stage_id": "rag",
+            "status": PipelineStatus.PROCESSING,
+            "progress": 0,
+        }
     elif stage == "tts_completed":  # pre-tts 완료
         segments = metadata.get("segments", [])
         update_payload = await pretts_complete_processing(db, project_id, segments)
@@ -140,6 +139,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             status=PipelineStatus.COMPLETED,
         )
 
-    await update_pipeline(db, project_id, update_payload)
+    if update_payload.get("stage_id"):
+        await update_pipeline(db, project_id, update_payload)
 
     return result

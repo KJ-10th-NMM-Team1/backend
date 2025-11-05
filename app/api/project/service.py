@@ -1,17 +1,73 @@
 from fastapi import HTTPException, status
 from datetime import datetime
 from pymongo.errors import PyMongoError
-from typing import TypedDict
+from typing import TypedDict, Optional
 from bson import ObjectId
 from bson.errors import InvalidId
 
 from ..deps import DbDep
-from ..project.models import ProjectCreate, ProjectUpdate, ProjectPublic
+from ..project.models import ProjectCreate, ProjectUpdate, ProjectPublic, ProjectOut
 from ..pipeline.service import _create_default_pipeline
 
 
 class ProjectCreateResult(TypedDict):
     project_id: str
+
+
+async def get_project_paging(
+    db: DbDep,
+    user_id: Optional[str] = None,
+    sort: str = "createdAt",
+    page: int = 1,
+    limit: int = 10,
+):
+    skip = (page - 1) * limit
+    docs = (
+        await db["projects"]
+        .find({"owner_code": user_id})
+        .sort(sort, -1)
+        .skip(skip)
+        .limit(limit)
+        .to_list(length=limit)
+    )
+
+    project_ids = [doc["_id"] for doc in docs]
+
+    pipeline = [
+        {"$match": {"project_id": {"$in": project_ids}}},
+        {
+            "$lookup": {
+                "from": "issues",
+                "let": {"segmentId": "$_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$segment_id", "$$segmentId"]}}},
+                    {"$count": "count"},
+                ],
+                "as": "issue_docs",
+            }
+        },
+        {
+            "$addFields": {
+                "issue_count": {"$ifNull": [{"$first": "$issue_docs.count"}, 0]}
+            }
+        },
+        {
+            "$group": {
+                "_id": "$project_id",
+                "issue_count": {"$sum": "$issue_count"},
+            }
+        },
+    ]
+    issue_counts = await db["segments"].aggregate(pipeline).to_list(length=None)
+    issue_map = {row["_id"]: row["issue_count"] for row in issue_counts}
+
+    result = []
+    for doc in docs:
+        doc["issue_count"] = issue_map.get(doc["_id"], 0)
+        result.append(ProjectOut.model_validate(doc))
+    return result
+
+    return [ProjectOut.model_validate(doc) for doc in docs]
 
 
 async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResult:
@@ -23,7 +79,7 @@ async def create_project(db: DbDep, payload: ProjectCreate) -> ProjectCreateResu
         "video_source": None,
         "created_at": now,
         "updated_at": now,
-        "owner_code": payload.owner_code
+        "owner_code": payload.owner_code,
     }
 
     try:
