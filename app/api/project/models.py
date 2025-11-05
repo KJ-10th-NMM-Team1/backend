@@ -46,3 +46,4 @@ class ProjectOut(BaseModel):
     segment_assets_prefix: Optional[str] = None
     segments: Optional[List[Dict[str, Any]]] = None
     owner_code: str
+    issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드    

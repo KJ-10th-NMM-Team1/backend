@@ -25,13 +25,12 @@ hooks:
     - location: deploy/stop_server.sh # 기존 서버 중지
       timeout: 300
       runas: ubuntu
-  BeforeInstall:
-    - location: deploy/install_dependencies.sh # 의존성 설치
+  AfterInstall:
+    - location: deploy/create_env.sh
       timeout: 300
       runas: ubuntu
 
-  AfterInstall:
-    - location: deploy/create_env.sh # 👈 방금 만든 .env 생성 스크립트
+    - location: deploy/install_dependencies.sh
       timeout: 300
       runas: ubuntu
 
