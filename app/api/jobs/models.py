@@ -49,21 +49,24 @@ class JobUpdateMetadata(BaseModel):
         "mt_completed",
         "tts_prepare",
         "tts_completed",
+        "pre_tts_prepare",
+        "pre_tts_completed",
         "completed",
-        "segment_tts_started",
-        "segment_tts_completed",
+        "failed",
         "segment_mix_started",
         "segment_mix_completed",
-        "failed",
+        "segment_tts_completed",
+        "segment_tts_started",
     ]
-    segments_count: int | None = None
-    metadata_key: str | None = None
-    result_key: str | None = None
-    target_lang: str | None = None
-    source_lang: str | None = None
-    input_key: str | None = None
-    segment_assets_prefix: str | None = None
+    segments_count: Optional[int] = None
+    metadata_key: Optional[str] = None
+    result_key: Optional[str] = None
+    target_lang: Optional[str] = None
+    source_lang: Optional[str] = None
+    input_key: Optional[str] = None
+    segment_assets_prefix: Optional[str] = None
     segments: Optional[list[dict[str, Any]]] = None
+    segment: Optional[dict[str, Any]] = None
 
 
 class JobUpdateStatus(BaseModel):
