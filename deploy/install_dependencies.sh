@@ -7,8 +7,8 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # 2. 그 상위 디렉토리 (압축이 풀린 루트, /opt/.../deployment-archive)
 ARCHIVE_ROOT=$( dirname "$SCRIPT_DIR" )
 # ---
-sudo apt-get update -y
-sudo apt-get install -y python3.12-venv jq
+# sudo apt-get update -y
+# sudo apt-get install -y python3.12-venv jq
 
 # 3. venv가 설치될 최종 목적지
 APP_DIR="/home/ubuntu/app"
