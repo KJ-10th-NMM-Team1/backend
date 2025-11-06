@@ -51,7 +51,7 @@ def normalize(s):
 
 def glossary_docs():
     docs = []
-    with open(DATA / "base.jsonl", "r", encoding="utf-8") as f:
+    with open(f"{DATA}/base.jsonl", "r", encoding="utf-8") as f:
         for line in f:
             item = json.loads(line)
             term = item["term"]
@@ -89,7 +89,7 @@ def glossary_docs():
 
 
 def example_docs():
-    p = DATA / "examples.jsonl"
+    p = f"{DATA}/examples.jsonl"
     if not p.exists():
         return []
     docs = []
@@ -119,7 +119,7 @@ def build_index(name, docs, embeddings):
     index = faiss.IndexFlatIP(emb.shape[1])
     index.add(emb)
     faiss.write_index(index, str(STORE / f"{name}.faiss"))
-    with open(STORE / f"{name}.jsonl", "w", encoding="utf-8") as f:
+    with open(f"{STORE}/{name}.jsonl", "w", encoding="utf-8") as f:
         for d in docs:
             f.write(json.dumps(d, ensure_ascii=False) + "\n")
     print(f"Indexed {name}: {len(docs)} items.")
