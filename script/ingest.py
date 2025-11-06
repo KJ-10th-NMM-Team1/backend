@@ -13,9 +13,12 @@ from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
-DATA = Path("data/glossaries")
-STORE = Path("store")
-STORE.mkdir(exist_ok=True)
+
+current_dir = os.getcwd()
+DATA = os.path.join(current_dir, "data/glossaries")
+STORE = os.path.join(current_dir, "store")
+
+os.makedirs(STORE, exist_ok=True)
 EMB = SentenceTransformer("BAAI/bge-m3")
 
 
