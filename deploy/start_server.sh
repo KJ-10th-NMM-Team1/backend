@@ -1,9 +1,6 @@
 #!/bin/bash
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-# 2. 그 상위 디렉토리 (압축이 풀린 루트, /opt/.../deployment-archive)
-ARCHIVE_ROOT=$( dirname "$SCRIPT_DIR" )
-# 1. 최종 배포 디렉토리
+
 APP_DIR="/home/ubuntu/app"
 
 # 2. 가상 환경(venv) 경로
@@ -23,7 +20,7 @@ cd $APP_DIR
 
 # 시작 전 ingest 실행 (실패해도 서버는 계속 기동)
 echo "Running glossary ingestion..."
-python $ARCHIVE_ROOT/script/ingest.py || echo "WARNING: glossary ingestion failed (continuing startup)"
+python script/ingest.py || echo "WARNING: glossary ingestion failed (continuing startup)"
 
 # 5. FastAPI 서버를 백그라운드로 실행 (uvicorn)
 echo "Starting FastAPI server (uvicorn): $APP_DIR..."
