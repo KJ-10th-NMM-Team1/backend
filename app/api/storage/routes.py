@@ -2,13 +2,14 @@
 import os
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
-
+from pymongo.errors import PyMongoError
 from app.api.jobs.service import start_job
-from app.api.project.service import create_project, update_project
+from app.api.project.service import ProjectService
 from app.config.s3 import s3
 from ..deps import DbDep
+from bson.errors import InvalidId
 from ..project.models import ProjectUpdate
 from ..pipeline.service import update_pipeline_stage
 from ..pipeline.models import PipelineUpdate, PipelineStatus
@@ -19,13 +20,25 @@ upload_router = APIRouter(prefix="/storage", tags=["storage"])
 
 
 @upload_router.post("/prepare-upload")
-async def prepare_upload(payload: PresignRequest, db: DbDep):
+async def prepare_upload(
+    payload: PresignRequest,
+    project_service: ProjectService = Depends(ProjectService),
+):
     bucket = os.getenv("AWS_S3_BUCKET")
     if not bucket:
         raise HTTPException(status_code=500, detail="AWS_S3_BUCKET env not set")
-
-    project = await create_project(db, payload)
-    project_id = project["project_id"]
+    try:
+        project_id = await project_service.create_project(payload)
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create project",
+        ) from exc
+    if not project_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Insert did not return an ID",
+        )
 
     object_key = f"projects/{project_id}/inputs/videos/{uuid4()}_{payload.filename}"
 
@@ -51,13 +64,28 @@ async def prepare_upload(payload: PresignRequest, db: DbDep):
 
 
 @upload_router.post("/finish-upload", status_code=status.HTTP_202_ACCEPTED)
-async def fin_upload(payload: UploadFinalize, db: DbDep):
+async def fin_upload(
+    db: DbDep,
+    payload: UploadFinalize,
+    project_service: ProjectService = Depends(ProjectService),
+):
     update_payload = ProjectUpdate(
         project_id=payload.project_id,
         status="upload_done",
         video_source=payload.object_key,
     )
-    result = await update_project(db, update_payload)
+    try:
+        result = await project_service.update_project(update_payload)
+    except InvalidId as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid project_id",
+        ) from exc
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update project",
+        ) from exc
 
     await update_pipeline_stage(
         db,
