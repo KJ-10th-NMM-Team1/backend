@@ -5,8 +5,7 @@ from typing import List, Any, Optional
 from pymongo.errors import PyMongoError
 from app.api.deps import DbDep
 from .models import ProjectOut
-from .service import get_project_paging
-
+from .service import ProjectService
 from app.api.auth.model import UserOut
 from app.api.auth.service import get_current_user_from_cookie
 
@@ -30,15 +29,15 @@ project_router = APIRouter(prefix="/projects", tags=["Projects"])
     summary="현재 사용자 프로젝트 목록",
 )
 async def list_my_projects(
-    db: DbDep,
     current_user: UserOut = Depends(get_current_user_from_cookie),
     sort: Optional[str] = Query(default="createdAt", description="정렬 필드"),
     page: int = Query(1, ge=1),
     limit: int = Query(6, ge=1, le=100),
+    project_service: ProjectService = Depends(ProjectService),
 ) -> List[ProjectOut]:
     try:
-        return await get_project_paging(
-            db, sort=sort, page=page, limit=limit, user_id=current_user.id
+        return await project_service.get_project_paging(
+            sort=sort, page=page, limit=limit, user_id=current_user.id
         )
     except InvalidId as exc:
         raise HTTPException(
@@ -103,3 +102,26 @@ async def get_project(project_id: str, db: DbDep) -> ProjectOut:
     serialized = _serialize(project)
 
     return ProjectOut.model_validate(serialized)
+
+
+@project_router.delete("/{project_id}", response_model=int, summary="프로젝트 삭제")
+async def delete_project(
+    project_id: str,
+    project_service: ProjectService = Depends(ProjectService),
+) -> None:
+    try:
+        project_oid = ObjectId(project_id)
+    except InvalidId as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid project_id",
+        ) from exc
+
+    result = await project_service.delete_project(project_oid)
+    if result == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    return result
