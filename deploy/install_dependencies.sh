@@ -18,7 +18,6 @@ VENV_DIR="$APP_DIR/venv"
 if [ -d "$APP_DIR" ]; then
     echo "Removing existing APP directory: $APP_DIR"
     rm -rf "$VENV_DIR"
-    rm -rf "$APP_DIR"
 fi
 echo "Create APP directory: $APP_DIR"
 mkdir -p $APP_DIR
@@ -31,7 +30,7 @@ source "$VENV_DIR/bin/activate"
 
 pip install --upgrade pip
 
-REQ_FILE="$ARCHIVE_ROOT/requirements.txt" 
+REQ_FILE="requirements.txt"
 
 echo "Installing dependencies from $REQ_FILE..."
 if [ -f "$REQ_FILE" ]; then
