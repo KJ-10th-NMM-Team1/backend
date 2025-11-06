@@ -31,3 +31,21 @@ class VoiceConfigUpdate(BaseModel):
     """보이스 설정 업데이트 요청"""
 
     voice_config: Dict[str, VoiceMapping]
+
+
+class VoiceUploadRequest(BaseModel):
+    project_id: str
+    filename: str
+    content_type: str
+
+
+class VoiceUploadFinalize(BaseModel):
+    object_key: str
+
+
+class CustomVoice(BaseModel):
+    """업로드된 커스텀 보이스 정보"""
+
+    id: str  # S3 object_key
+    name: str  # 파일명
+    uploaded_at: str

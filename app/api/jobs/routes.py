@@ -39,15 +39,6 @@ async def update_pipeline(db, project_id, payload):
 
 
 async def pretts_complete_processing(db, project_id, segments):
-    # rag processing - 0
-    rag_payload = {
-        "project_id": project_id,
-        "stage_id": "rag",
-        "status": PipelineStatus.PROCESSING,
-        "progress": 0,
-    }
-    await update_pipeline(db, project_id, rag_payload)
-
     # 세그먼트 Insert_many
     segment_service = SegmentService(db)
     await segment_service.insert_segments_from_metadata(project_id, segments)
@@ -125,25 +116,28 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=100,
             status=PipelineStatus.COMPLETED,
         )
-    elif stage in {"tts_prepare", "pre_tts_prepare"}:
+        await update_pipeline(db, project_id, update_payload)
+
+        update_payload = {
+            "project_id": project_id,
+            "stage_id": "rag",
+            "status": PipelineStatus.PROCESSING,
+            "progress": 0,
+        }
+    elif stage == "tts_completed":  # pre-tts 완료
+        segments = metadata.get("segments", [])
+        update_payload = await pretts_complete_processing(db, project_id, segments)
+    elif stage == "tts2_prepare":  # tts2: 최종 tts
         update_payload.update(
             stage_id="tts",
             progress=0,
         )
-    elif stage == "tts_completed":  # pre-tts 완료
-        segments = metadata.get("segments", [])
-        update_payload = await pretts_complete_processing(db, project_id, segments)
-    # elif stage == "tts2_prepare":  # tts2: 최종 tts
-    #     update_payload.update(
-    #         stage_id="tts",
-    #         progress=0,
-    #     )
-    # elif stage == "tts2_completed":
-    #     update_payload.update(
-    #         stage_id="tts",
-    #         progress=100,
-    #         status=PipelineStatus.COMPLETED,
-    #     )
+    elif stage == "tts2_completed":
+        update_payload.update(
+            stage_id="tts",
+            progress=100,
+            status=PipelineStatus.COMPLETED,
+        )
 
     if update_payload.get("stage_id"):
         await update_pipeline(db, project_id, update_payload)
