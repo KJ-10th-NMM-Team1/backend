@@ -8,7 +8,6 @@ from ..project.models import (
     ProjectUpdate,
     ProjectPublic,
     ProjectOut,
-    ProjectCreateResult,
 )
 from ..pipeline.service import _create_default_pipeline
 
