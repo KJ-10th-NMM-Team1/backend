@@ -31,6 +31,10 @@ class SegmentService:
         result = await collection.insert_one(doc)
         return str(result.inserted_id)
 
+    async def delete_segments_by_project(self, project_id: ObjectId) -> int:
+        result = await self.segment_collection.delete_many({"project_id": project_id})
+        return result.deleted_count
+
     async def insert_segments_from_metadata(
         self,
         project_id: str | ObjectId,
