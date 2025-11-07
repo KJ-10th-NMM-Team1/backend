@@ -96,7 +96,7 @@ class ProjectService:
 
         project_id = str(result.inserted_id)
         # 프로젝트 생성 시 파이프 라인도 생성
-        await _create_default_pipeline(self.project_collection, project_id)
+        await _create_default_pipeline(project_id)
 
         return project_id
 
