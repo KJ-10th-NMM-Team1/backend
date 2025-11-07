@@ -24,5 +24,5 @@ python script/ingest.py || echo "WARNING: glossary ingestion failed (continuing 
 
 # 5. FastAPI 서버를 백그라운드로 실행 (uvicorn)
 echo "Starting FastAPI server (uvicorn): $APP_DIR..."
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$APP_DIR/app.log" 2> "$APP_DIR/error.log" &
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > "$APP_DIR/app.log" 2> "$APP_DIR/error.log" &
 echo "Life Cycle - ApplicationStart: complete."
