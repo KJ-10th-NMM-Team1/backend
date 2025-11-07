@@ -14,6 +14,7 @@ from ..pipeline.service import _create_default_pipeline
 
 class ProjectService:
     def __init__(self, db: DbDep):
+        self.db = db
         self.project_collection = db.get_collection("projects")
         self.segment_collection = db.get_collection("segments")
 
@@ -25,14 +26,14 @@ class ProjectService:
     async def get_project_paging(
         self,
         user_id: Optional[str] = None,
-        sort: str = "createdAt",
+        sort: str = "created_at",
         page: int = 1,
-        limit: int = 10,
+        limit: int = 6,
     ) -> List[ProjectOut]:
         skip = (page - 1) * limit
         docs = (
             await self.project_collection.find({"owner_code": user_id})
-            .sort(sort, -1)
+            .sort([(sort, -1)])
             .skip(skip)
             .limit(limit)
             .to_list(length=limit)
@@ -96,7 +97,7 @@ class ProjectService:
 
         project_id = str(result.inserted_id)
         # 프로젝트 생성 시 파이프 라인도 생성
-        await _create_default_pipeline(project_id)
+        await _create_default_pipeline(db=self.db, project_id=project_id)
 
         return project_id
 

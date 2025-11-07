@@ -31,14 +31,14 @@ project_router = APIRouter(prefix="/projects", tags=["Projects"])
 )
 async def list_my_projects(
     # current_user: UserOut = Depends(get_current_user_from_cookie),
-    sort: Optional[str] = Query(default="createdAt", description="정렬 필드"),
+    sort: Optional[str] = Query(default="created_at", description="정렬 필드"),
     page: int = Query(1, ge=1),
     limit: int = Query(6, ge=1, le=100),
     project_service: ProjectService = Depends(ProjectService),
 ) -> List[ProjectOut]:
     try:
         return await project_service.get_project_paging(
-            sort=sort, page=page, limit=limit, user_id=""
+            sort=sort, page=page, limit=limit, user_id="owner-1234"
         )
     except InvalidId as exc:
         raise HTTPException(
