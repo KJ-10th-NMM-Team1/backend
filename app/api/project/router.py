@@ -6,6 +6,7 @@ from pymongo.errors import PyMongoError
 from app.api.deps import DbDep
 from .models import ProjectOut
 from .service import ProjectService
+from ..segment.segment_service import SegmentService
 from app.api.auth.model import UserOut
 
 # from app.api.auth.service import get_current_user_from_cookie
@@ -109,6 +110,7 @@ async def get_project(project_id: str, db: DbDep) -> ProjectOut:
 async def delete_project(
     project_id: str,
     project_service: ProjectService = Depends(ProjectService),
+    segment_service: SegmentService = Depends(SegmentService),
 ) -> None:
     try:
         project_oid = ObjectId(project_id)
@@ -123,6 +125,13 @@ async def delete_project(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
+        )
+
+    result = await segment_service.delete_segments_by_project(project_oid)
+    if result == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="segment not found",
         )
 
     return result
