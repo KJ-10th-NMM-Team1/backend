@@ -128,10 +128,4 @@ async def delete_project(
         )
 
     result = await segment_service.delete_segments_by_project(project_oid)
-    if result == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="segment not found",
-        )
-
     return result
