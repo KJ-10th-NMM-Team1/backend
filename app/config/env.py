@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
 
 load_dotenv()
 _raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
@@ -12,3 +13,12 @@ GOOGLE_DEFAULT_ROLE = os.getenv("GOOGLE_DEFAULT_ROLE", "user")
 REFRESH_TOKEN_EXPIRE_DAYS = int(
     os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")
 )  # refresh token 만료 기간
+
+
+class Settings(BaseSettings):
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    S3_BUCKET: str = os.getenv("AWS_S3_BUCKET", "dupilot-dev-media")
+    AWS_REGION: str = os.getenv("AWS_REGION", "ap-northeast-2")
+
+
+settings = Settings()
