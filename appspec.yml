@@ -27,11 +27,10 @@ hooks:
       runas: ubuntu
   AfterInstall:
     - location: deploy/create_env.sh
-      timeout: 300
+      timeout: 1800
       runas: ubuntu
-
     - location: deploy/install_dependencies.sh
-      timeout: 300
+      timeout: 1800
       runas: ubuntu
 
   ApplicationStart:
