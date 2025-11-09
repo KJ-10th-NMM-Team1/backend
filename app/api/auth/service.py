@@ -12,6 +12,7 @@ from ...config.env import (
     SECRET_KEY,
     ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     GOOGLE_CLIENT_ID,
     GOOGLE_DEFAULT_ROLE,
 )
@@ -41,6 +42,16 @@ class AuthService:
     async def get_user_by_email(self, email: str):
         return await self.collection.find_one({"email": email})
 
+    async def get_user_by_sub(self, sub: str):
+        return await self.collection.find_one(
+            {
+                "$or": [
+                    {"email": sub},
+                    {"google_sub": sub},
+                ]
+            }
+        )
+
     def create_access_token(
         self, data: dict, expires_delta: Optional[timedelta] = None
     ) -> str:
@@ -58,6 +69,57 @@ class AuthService:
         # "sub" (subject)는 토큰의 주체(사용자)를 나타내는 표준 필드입니다.
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
         return encoded_jwt
+
+    def create_refresh_token(self, data: dict) -> str:
+        """Refresh Token 생성을 생성합니다."""
+        to_encode = data.copy()
+        expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        to_encode.update({"exp": expire, "type": "refresh"})
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        return encoded_jwt
+
+    async def update_user_session_token(self, sub: str, refresh_token: str):
+        """사용자의 current_session_token을 업데이트합니다."""
+        await self.collection.update_one(
+            {"$or": [{"email": sub}, {"google_sub": sub}]},
+            {"$set": {"current_session": refresh_token}},
+        )
+
+    async def verify_refresh_token(self, refresh_token: str) -> Dict[str, Any]:
+        """Refresh Token을 검증하고 사용자 정보를  반환합니다."""
+        credentials_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        try:
+            payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+
+            # refresh token 타입 확인
+            if payload.get("type") != "refresh":
+                raise credentials_exception
+
+            sub: str = payload.get("sub")
+            if sub is None:
+                raise credentials_exception
+
+        except JWTError:
+            raise credentials_exception
+
+        # DB에서 사용자 조회 및 토큰 일치 확인
+        user = await self.get_user_by_sub(sub)
+        if user is None:
+            raise credentials_exception
+
+        # 저장된 refresh token과 일치하는지 확인 (중복 로그인 방지)
+        if user.get("current_session") != refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        return {"sub": sub, "user": user}
 
     async def create_user(self, user_data: UserCreate) -> UserOut:
 
@@ -109,6 +171,13 @@ class AuthService:
                 detail="Invalid Google ID token.",
             ) from exc
 
+        google_sub = id_info.get("sub")
+        if not google_sub:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google account did not return a subject identifier.",
+            )
+
         email = id_info.get("email")
         if not email:
             raise HTTPException(
@@ -116,14 +185,8 @@ class AuthService:
                 detail="Google account did not return an email address.",
             )
 
-        if not id_info.get("email_verified", False):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Google account email is not verified.",
-            )
-
-        user = await self.get_user_by_email(email=email)
-
+        # google_sub로 사용자 조회 (이메일 x)
+        user = await self.collection.find_one({"google_sub": google_sub})
         if not user:
             username = id_info.get("name") or email.split("@")[0]
             user_doc: Dict[str, Any] = {
@@ -131,7 +194,7 @@ class AuthService:
                 "username": username,
                 "hashed_password": "",
                 "role": self.google_default_role,
-                "google_sub": id_info.get("sub"),
+                "google_sub": google_sub,
                 "createdAt": datetime.now(timezone.utc),
             }
             result = await self.collection.insert_one(user_doc)
@@ -204,17 +267,17 @@ async def get_current_user_from_cookie(
     try:
         # [5] JWT 토큰을 디코딩합니다.
         payload = jwt.decode(token_value, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        sub: str = payload.get("sub")
+        if sub is None:
             raise credentials_exception
 
-        token_data = TokenData(sub=email)
+        # token_data = TokenData(sub=email)
 
     except JWTError:
         raise credentials_exception
 
-    # [6] 토큰이 유효하면, DB에서 실제 사용자를 조회합니다.
-    user = await auth_service.get_user_by_email(email=token_data.sub)
+    # sub가 email or google_sub일 수 있음. DB 조회
+    user = await auth_service.get_user_by_sub(sub)
 
     if user is None:
         # 토큰은 유효하지만 해당 사용자가 DB에 없을 경우
