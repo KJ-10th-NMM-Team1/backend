@@ -10,11 +10,16 @@ worker_db = make_db()
 project_service = ProjectService(worker_db)
 
 
-async def finalize_ingest(project_id: str, object_key: str) -> None:
+async def finalize_ingest(
+    project_id: str,
+    object_key: str,
+    thumbnail: dict[str, str | None] | None = None,
+) -> None:
     update_payload = ProjectUpdate(
         project_id=project_id,
         status="upload_done",
         video_source=object_key,
+        thumbnail=thumbnail,
     )
     project = await project_service.update_project(payload=update_payload)
 

@@ -1,6 +1,7 @@
 # app/api/routes/upload.py
 import os
 import asyncio
+import tempfile
 from uuid import uuid4
 from hashlib import sha256
 from sse_starlette.sse import EventSourceResponse
@@ -10,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from redis.exceptions import RedisError
 from rq import Queue
 from pymongo.errors import PyMongoError
+from botocore.exceptions import ClientError
 
 from app.api.jobs.service import start_job
 from app.api.project.service import ProjectService
@@ -25,6 +27,8 @@ from app.api.auth.model import UserOut
 from .models import PresignRequest, RegisterRequest, UploadFinalize
 from app.config.redis import get_redis
 from app.workers.jobs.video_ingest import run_ingest
+from app.utils.thumbnail import extract_and_upload_thumbnail, ThumbnailError
+from pathlib import Path
 
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
 
@@ -154,10 +158,38 @@ async def finish_upload(
     # _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
     project_service: ProjectService = Depends(ProjectService),
 ):
+    bucket = os.getenv("AWS_S3_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=500, detail="AWS_S3_BUCKET env not set")
+
+    thumbnail_payload: dict[str, str | None] | None = None
+    suffix = Path(payload.object_key).suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+    try:
+        try:
+            s3.download_file(bucket, payload.object_key, str(tmp_path))
+        except ClientError:
+            thumbnail_payload = None
+        else:
+            try:
+                thumbnail_key = extract_and_upload_thumbnail(
+                    tmp_path, payload.project_id
+                )
+                thumbnail_payload = {"kind": "s3", "key": thumbnail_key, "url": None}
+            except ThumbnailError:
+                thumbnail_payload = None
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
     update_payload = ProjectUpdate(
         project_id=payload.project_id,
         status="upload_done",
         video_source=payload.object_key,
+        thumbnail=thumbnail_payload,
     )
     try:
         get_pipeline_status(db, update_payload.project_id)

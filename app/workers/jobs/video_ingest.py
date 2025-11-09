@@ -12,6 +12,7 @@ from yt_dlp import YoutubeDL
 from app.config.env import settings
 from app.config.s3 import s3
 from app.utils.s3 import build_object_key
+from app.utils.thumbnail import extract_and_upload_thumbnail, ThumbnailError
 
 from app.workers.jobs.video_ingest_finalizer import finalize_ingest
 from app.workers.jobs.video_ingest_progress import (
@@ -33,7 +34,7 @@ async def _download_youtube_video(
     temp_dir: str,
     *,
     progress_hook: Callable[[dict[str, Any]], None] | None = None,
-) -> Path:
+) -> tuple[Path, dict[str, Any] | None]:
     def _download() -> Path:
         ydl_opts = {
             "outtmpl": os.path.join(temp_dir, "%(id)s.%(ext)s"),
@@ -44,7 +45,7 @@ async def _download_youtube_video(
             ydl_opts["progress_hooks"] = [progress_hook]
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            return Path(ydl.prepare_filename(info))
+            return Path(ydl.prepare_filename(info)), info
 
     return await asyncio.to_thread(_download)
 
@@ -106,9 +107,12 @@ async def _run_ingest_async(payload: Mapping[str, Any]) -> str:
     ingest_root = Path(settings.INGEST_WORKDIR)
     ingest_root.mkdir(parents=True, exist_ok=True)
 
+    thumbnail_payload: dict[str, str | None] | None = None
+    metadata: dict[str, Any] | None = None
+
     with tempfile.TemporaryDirectory(dir=str(ingest_root)) as temp_dir:
         try:
-            local_file = await _download_youtube_video(
+            local_file, metadata = await _download_youtube_video(
                 source_url, temp_dir, progress_hook=_progress_hook
             )
         except HTTPException:
@@ -140,6 +144,20 @@ async def _run_ingest_async(payload: Mapping[str, Any]) -> str:
                 detail="S3 업로드 중 오류가 발생했습니다.",
             ) from exc
 
+        thumbnail_payload = None
+        if metadata and metadata.get("thumbnail"):
+            thumbnail_payload = {
+                "kind": "external",
+                "key": None,
+                "url": metadata.get("thumbnail"),
+            }
+        else:
+            try:
+                thumbnail_key = extract_and_upload_thumbnail(local_file, project_id)
+                thumbnail_payload = {"kind": "s3", "key": thumbnail_key, "url": None}
+            except ThumbnailError:
+                thumbnail_payload = None
+
     emit_progress(
         project_id,
         {
@@ -161,7 +179,7 @@ async def _run_ingest_async(payload: Mapping[str, Any]) -> str:
         },
     )
 
-    await finalize_ingest(project_id, object_key)
+    await finalize_ingest(project_id, object_key, thumbnail_payload)
 
     update_job_stage(job, "done", s3_key=object_key, progress=FINALIZE_PROGRESS_DONE)
     emit_progress(

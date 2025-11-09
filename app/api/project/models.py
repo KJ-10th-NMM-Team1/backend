@@ -8,12 +8,19 @@ PyObjectId = Annotated[
 ]
 
 
+class ProjectThumbnail(BaseModel):
+    kind: str  # "s3" or "external"
+    key: str | None = None
+    url: str | None = None
+
+
 class ProjectPublic(BaseModel):
     project_id: str
     title: str
     progress: int
     status: str
     video_source: str | None
+    thumbnail: ProjectThumbnail | None = None
     created_at: datetime
     updated_at: datetime
     segment_assets_prefix: Optional[str] = None
@@ -43,6 +50,7 @@ class ProjectUpdate(BaseModel):
     project_id: str
     status: str
     video_source: str | None = None
+    thumbnail: ProjectThumbnail | None = None
     segment_assets_prefix: Optional[str] = None
     segments: Optional[List[Dict[str, Any]]] = None
     owner_code: str | None = None
@@ -54,6 +62,7 @@ class ProjectOut(BaseModel):
     progress: int
     status: str
     video_source: str | None
+    thumbnail: ProjectThumbnail | None = None
     created_at: datetime
     updated_at: datetime
     segment_assets_prefix: Optional[str] = None
