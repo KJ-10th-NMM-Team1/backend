@@ -14,7 +14,8 @@ from ..project.models import ProjectUpdate
 from ..pipeline.service import update_pipeline_stage, get_pipeline_status
 from ..pipeline.models import PipelineUpdate, PipelineStatus
 from .models import PresignRequest, UploadFinalize
-
+from app.api.auth.service import get_current_user_from_cookie
+from app.api.auth.model import UserOut
 
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
 
@@ -22,6 +23,7 @@ upload_router = APIRouter(prefix="/storage", tags=["storage"])
 @upload_router.post("/prepare-upload")
 async def prepare_upload(
     payload: PresignRequest,
+    _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
     project_service: ProjectService = Depends(ProjectService),
 ):
     bucket = os.getenv("AWS_S3_BUCKET")
@@ -67,6 +69,7 @@ async def prepare_upload(
 async def fin_upload(
     db: DbDep,
     payload: UploadFinalize,
+    _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
     project_service: ProjectService = Depends(ProjectService),
 ):
     update_payload = ProjectUpdate(

@@ -22,6 +22,7 @@ class User(BaseModel):
     username: str
     hashed_password: str
     role: str
+    current_session: Optional[str] = None  # refresh token
 
 
 class UserLogin(BaseModel):
@@ -45,3 +46,8 @@ class UserOut(BaseModel):
 
 class TokenData(BaseModel):
     sub: Optional[str] = None
+
+
+# RefreshToken 요청 모델 추가
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
