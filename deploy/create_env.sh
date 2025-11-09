@@ -10,9 +10,15 @@ aws secretsmanager get-secret-value \
     --query SecretString \
     --output text | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]' > /home/ubuntu/app/.env
 
+SA_JSON=$(grep '^GCP_SERVICE_ACCOUNT_JSON=' /home/ubuntu/app/.env | cut -d= -f2-)
+printf '%s\n' "$SA_JSON" > /home/ubuntu/app/gcp-sa.json
+chmod 600 /home/ubuntu/app/gcp-sa.json
+
 # 2. 생성된 .env 파일의 소유자를 'ubuntu' 사용자로 변경합니다.
 #    (appspec.yml의 destination 경로와 runas 사용자와 일치시킵니다.)
 chown ubuntu:ubuntu /home/ubuntu/app/.env
 chmod 600 /home/ubuntu/app/.env # (보안을 위해 소유자만 읽고 쓸 수 있도록 설정)
+
+
 
 echo ".env file created successfully."

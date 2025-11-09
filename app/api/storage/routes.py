@@ -11,7 +11,7 @@ from app.config.s3 import s3
 from ..deps import DbDep
 from bson.errors import InvalidId
 from ..project.models import ProjectUpdate
-from ..pipeline.service import update_pipeline_stage
+from ..pipeline.service import update_pipeline_stage, get_pipeline_status
 from ..pipeline.models import PipelineUpdate, PipelineStatus
 from .models import PresignRequest, UploadFinalize
 
@@ -75,6 +75,7 @@ async def fin_upload(
         video_source=payload.object_key,
     )
     try:
+        get_pipeline_status(db, update_payload.project_id)
         result = await project_service.update_project(update_payload)
     except InvalidId as exc:
         raise HTTPException(

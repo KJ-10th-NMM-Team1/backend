@@ -6,8 +6,10 @@ from pymongo.errors import PyMongoError
 from app.api.deps import DbDep
 from .models import ProjectOut
 from .service import ProjectService
+from ..segment.segment_service import SegmentService
 from app.api.auth.model import UserOut
-from app.api.auth.service import get_current_user_from_cookie
+
+# from app.api.auth.service import get_current_user_from_cookie
 
 
 def _serialize(value: Any) -> Any:
@@ -29,15 +31,15 @@ project_router = APIRouter(prefix="/projects", tags=["Projects"])
     summary="현재 사용자 프로젝트 목록",
 )
 async def list_my_projects(
-    current_user: UserOut = Depends(get_current_user_from_cookie),
-    sort: Optional[str] = Query(default="createdAt", description="정렬 필드"),
+    # current_user: UserOut = Depends(get_current_user_from_cookie),
+    sort: Optional[str] = Query(default="created_at", description="정렬 필드"),
     page: int = Query(1, ge=1),
     limit: int = Query(6, ge=1, le=100),
     project_service: ProjectService = Depends(ProjectService),
 ) -> List[ProjectOut]:
     try:
         return await project_service.get_project_paging(
-            sort=sort, page=page, limit=limit, user_id=current_user.id
+            sort=sort, page=page, limit=limit, user_id="owner-1234"
         )
     except InvalidId as exc:
         raise HTTPException(
@@ -108,6 +110,7 @@ async def get_project(project_id: str, db: DbDep) -> ProjectOut:
 async def delete_project(
     project_id: str,
     project_service: ProjectService = Depends(ProjectService),
+    segment_service: SegmentService = Depends(SegmentService),
 ) -> None:
     try:
         project_oid = ObjectId(project_id)
@@ -124,4 +127,5 @@ async def delete_project(
             detail="Project not found",
         )
 
+    result = await segment_service.delete_segments_by_project(project_oid)
     return result
