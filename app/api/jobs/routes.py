@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from datetime import datetime
 
+import logging
 from ..deps import DbDep
 from .models import JobRead, JobUpdateStatus
 from .service import get_job, update_job_status
@@ -9,7 +10,12 @@ from ..pipeline.models import PipelineUpdate, PipelineStatus
 from ..translate.service import suggestion_by_project
 from app.api.pipeline.router import project_channels
 from ..segment.segment_service import SegmentService
+from ..auth.service import AuthService
+from ..auth.model import UserOut
+from ..voice_samples.service import VoiceSampleService
+from ..voice_samples.models import VoiceSampleUpdate
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
@@ -80,6 +86,38 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                 if hasattr(payload.metadata, "model_dump")
                 else payload.metadata
             )
+    # voice_sample_id가 있으면 audio_sample_url 업데이트
+    if metadata and "voice_sample_id" in metadata:
+        if result.status == "done" and result.result_key:
+            voice_sample_id = metadata["voice_sample_id"]
+            try:
+                service = VoiceSampleService(db)
+
+                # 샘플 조회하여 owner 확인
+                sample = await service.get_voice_sample(voice_sample_id)
+                if sample:
+                    # owner 정보 가져오기
+                    auth_service = AuthService(db)
+                    user_doc = await auth_service.get_user_by_sub(
+                        str(sample["owner_id"])
+                    )
+                    if user_doc:
+                        owner = UserOut(**user_doc)
+
+                        # audio_sample_url 업데이트 (result_key를 storage API URL 로 변환)
+                        audio_sample_url = f"/api/storage/media/{result.result_key}"
+                        await service.update_voice_sample(
+                            voice_sample_id,
+                            VoiceSampleUpdate(audio_sample_url=audio_sample_url),
+                            owner,
+                        )
+                        logger.info(
+                            f"Updated audio_sample_url for voice sample {voice_sample_id}"
+                        )
+            except Exception as exc:
+                logger.error(
+                    f"Failed to update audio_sample_url for voice sample {voice_sample_id}: {exc}"
+                )
 
     # state 없을 때 리턴
     if not metadata or "stage" not in metadata:

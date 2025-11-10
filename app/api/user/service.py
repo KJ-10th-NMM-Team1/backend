@@ -4,7 +4,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import HTTPException, status
 from ..deps import DbDep
-from .model import UserSearchOut, UserUpdate
+from .models import UserSearchOut, UserUpdate
 from ..auth.model import UserOut
 
 

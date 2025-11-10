@@ -3,7 +3,7 @@ from typing import List
 from ..auth.service import get_current_user_from_cookie
 from ..auth.model import UserOut
 from .service import UserService
-from .model import UserSearchOut, UserUpdate
+from .models import UserSearchOut, UserUpdate
 from ..deps import DbDep
 
 user_router = APIRouter(prefix="/users", tags=["Users"])
