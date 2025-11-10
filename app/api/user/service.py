@@ -139,3 +139,32 @@ class UserService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
+
+    async def delete_user_by_id(self, user_id: str) -> None:
+        """
+        사용자 계정 삭제 (ID로 직접 삭제)
+
+        Args:
+            user_id: 삭제할 사용자 ID
+        """
+        # ObjectId 변환 및 검증
+        try:
+            user_oid = ObjectId(user_id)
+        except InvalidId as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id"
+            ) from exc
+
+        # 사용자 존재 확인
+        existing_user = await self.collection.find_one({"_id": user_oid})
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+
+        # 사용자 삭제
+        result = await self.collection.delete_one({"_id": user_oid})
+        if result.deleted_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
