@@ -35,15 +35,15 @@ class ProjectBase(BaseModel):
     source_type: str  # 'file' | 'youtube'
     video_source: str | None = None
     source_language: Optional[str] = None
-    created_at: datetime
-    duration_seconds: Optional[int] = None
+    target_languages: List[str] = []
 
 
 class ProjectPublic(ProjectBase):
     project_id: str
     thumbnail: ProjectThumbnail | None = None
+    duration_seconds: Optional[int] = None
     glosary_id: Optional[str] = None
-    # segments: Optional[List[Dict[str, Any]]] = None
+    created_at: datetime
 
 
 class ProjectCreateResponse(BaseModel):
@@ -84,6 +84,7 @@ class ProjectTarget(BaseModel):
     status: ProjectTargetStatus
     progress: int
 
+
 class ProjectOut(BaseModel):
     id: PyObjectId = Field(validation_alias="_id")
     title: str
@@ -105,22 +106,23 @@ class EditorPlaybackState(BaseModel):
     playback_rate: float = 1.0
     video_source: str | None
 
+
 class SegmentTranslationResponse(BaseModel):
-  id: PyObjectId
-  project_id: PyObjectId
-  language_code: str
-  speaker_tag: str
-  start: float = Field(..., ge=0)
-  end: float = Field(..., ge=0)
-  source_text: str 
-  target_text: str | None = None
-  segment_audio_url: str | None = None 
+    id: PyObjectId
+    project_id: PyObjectId
+    language_code: str
+    speaker_tag: str
+    start: float = Field(..., ge=0)
+    end: float = Field(..., ge=0)
+    source_text: str
+    target_text: str | None = None
+    segment_audio_url: str | None = None
 
 
 class EditorStateResponse(BaseModel):
     project_id: str
     segments: list[SegmentTranslationResponse] = []
-    # voices: list[VoiceSampleOut] = []   
+    # voices: list[VoiceSampleOut] = []
     playback: EditorPlaybackState
 
 
@@ -131,10 +133,10 @@ class ProjectSegmentCreate(BaseModel):
     source_text: str
     is_verified: bool = False
     created_at: datetime | None = None
-    updated_at: datetime | None = None    
+    updated_at: datetime | None = None
 
 
-class SegmentTranslationCreate(BaseModel): 
+class SegmentTranslationCreate(BaseModel):
     language_code: str
     target_text: str | None = None
     segment_audio_url: str | None = None
