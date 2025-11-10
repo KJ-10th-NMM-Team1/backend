@@ -225,8 +225,6 @@ def media_redirect(key: str):
     if not bucket:
         raise HTTPException(status_code=500, detail="AWS_S3_BUCKET env not set")
 
-    # 키 검증
-
     url = s3.generate_presigned_url(
         "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600
     )
