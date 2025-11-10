@@ -9,7 +9,7 @@ from .pipeline.router import pipeline_router
 from .auth.router import auth_router
 from .voice.router import voice_router
 from .translate.routes import trans_router
-from .translator.routes import translator_router
+from .language.router import router as language_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -24,4 +24,4 @@ api_router.include_router(pipeline_router)
 api_router.include_router(auth_router)
 api_router.include_router(voice_router)
 api_router.include_router(trans_router)
-api_router.include_router(translator_router)
+api_router.include_router(language_router)
