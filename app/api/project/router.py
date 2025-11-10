@@ -81,7 +81,14 @@ async def list_projects(db: DbDep):
                 "pipeline": [
                     {"$match": {"$expr": {"$eq": ["$project_id", "$$pid"]}}},
                     # "_id"를 제거하지 말고 나머지 필드만 제한하고 싶다면 project에서 다른 것만 지정
-                    {"$project": {"project_id": 1, "language_code": 1, "status": 1, "progress": 1}}
+                    {
+                        "$project": {
+                            "project_id": 1,
+                            "language_code": 1,
+                            "status": 1,
+                            "progress": 1,
+                        }
+                    },
                 ],
                 "as": "targets",
             }
@@ -110,10 +117,12 @@ async def get_project(project_id: str, db: DbDep):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
         )
-    
+
     project_id_str = str(project_oid)
-    targets = await db["project_targets"].find({"project_id": project_id_str}).to_list(None)
-    project["targets"] = targets    
+    targets = (
+        await db["project_targets"].find({"project_id": project_id_str}).to_list(None)
+    )
+    project["targets"] = targets
 
     segments = (
         await db["segments"]

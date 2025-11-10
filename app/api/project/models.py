@@ -41,9 +41,9 @@ class ProjectBase(BaseModel):
 class ProjectPublic(ProjectBase):
     project_id: str
     thumbnail: ProjectThumbnail | None = None
-    duration_seconds: Optional[int] = None
     glosary_id: Optional[str] = None
     created_at: datetime
+    duration_seconds: Optional[int] = None
 
 
 class ProjectCreateResponse(BaseModel):
@@ -93,9 +93,6 @@ class ProjectOut(BaseModel):
     thumbnail: ProjectThumbnail | None = None
     created_at: datetime
     duration_seconds: Optional[int] | None = None
-    # segment_assets_prefix: Optional[str] = None
-    # segments: Optional[List[Dict[str, Any]]] = None
-    # owner_id: str
     issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드
     targets: list[ProjectTarget] = Field(default_factory=list)
 
