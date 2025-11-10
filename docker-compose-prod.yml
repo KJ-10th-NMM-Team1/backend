@@ -11,7 +11,6 @@ services:
       - /etc/ssl/certs/global-bundle.pem:/etc/ssl/certs/global-bundle.pem:ro
       - .:/workspace:cached
       - ~/.aws:/root/.aws:ro
-      - /etc/ssl/certs/global-bundle.pem:/etc/ssl/certs/global-bundle.pem:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file:
       - .env
@@ -33,7 +32,6 @@ services:
       - .:/workspace:cached
       - ~/.aws:/root/.aws:ro
       - ./worker-scratch:/tmp/dupilot-ingest
-      - /etc/ssl/certs/global-bundle.pem:/etc/ssl/certs/global-bundle.pem:ro
     env_file:
       - .env
     environment:
