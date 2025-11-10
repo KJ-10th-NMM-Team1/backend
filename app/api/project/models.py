@@ -8,12 +8,19 @@ PyObjectId = Annotated[
 ]
 
 
+class ProjectThumbnail(BaseModel):
+    kind: str  # "s3" or "external"
+    key: str | None = None
+    url: str | None = None
+
+
 class ProjectPublic(BaseModel):
     project_id: str
     title: str
     progress: int
     status: str
     video_source: str | None
+    thumbnail: ProjectThumbnail | None = None
     created_at: datetime
     updated_at: datetime
     segment_assets_prefix: Optional[str] = None
@@ -22,14 +29,28 @@ class ProjectPublic(BaseModel):
 
 
 class ProjectCreate(BaseModel):
-    filename: str
+    title: str
+    filename: str | None = None
     owner_code: str
+    # sourceType: 'youtube' | 'file'
+    # youtubeUrl: str
+    # fileName: str | None
+    # fileSize: int | None
+    sourceLanguage: str
+    targetLanguages: List[str]
+    # detectAutomatically: bool
+    speakerCount: int
+
+
+class ProjectCreateResponse(BaseModel):
+    project_id: str
 
 
 class ProjectUpdate(BaseModel):
     project_id: str
     status: str
     video_source: str | None = None
+    thumbnail: ProjectThumbnail | None = None
     segment_assets_prefix: Optional[str] = None
     segments: Optional[List[Dict[str, Any]]] = None
     owner_code: str | None = None
@@ -41,9 +62,10 @@ class ProjectOut(BaseModel):
     progress: int
     status: str
     video_source: str | None
+    thumbnail: ProjectThumbnail | None = None
     created_at: datetime
     updated_at: datetime
     segment_assets_prefix: Optional[str] = None
-    segments: Optional[List[Dict[str, Any]]] = None
-    owner_code: str
-    issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드    
+    # segments: Optional[List[Dict[str, Any]]] = None
+    # owner_code: str
+    issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드
