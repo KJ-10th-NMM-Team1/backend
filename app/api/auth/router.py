@@ -11,7 +11,9 @@ from .model import RefreshTokenRequest
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@auth_router.put("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@auth_router.post(
+    "/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED
+)
 async def signup(
     user_data: UserCreate, auth_service: AuthService = Depends(AuthService)
 ) -> UserOut:
@@ -148,14 +150,6 @@ async def logout(
     )
 
     return {"message": "Logout successful"}
-
-
-@auth_router.get("/me", response_model=UserOut)
-async def read_users_me(
-    # [2] 이 의존성이 쿠키를 검사합니다.
-    current_user: UserOut = Depends(get_current_user_from_cookie),
-):
-    return current_user
 
 
 @auth_router.post(
