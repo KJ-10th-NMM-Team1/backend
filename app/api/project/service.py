@@ -8,6 +8,7 @@ from ..project.models import (
     ProjectUpdate,
     ProjectPublic,
     ProjectOut,
+    ProjectTargetStatus,
 )
 from ..pipeline.service import _create_default_pipeline
 
@@ -17,6 +18,7 @@ class ProjectService:
         self.db = db
         self.project_collection = db.get_collection("projects")
         self.segment_collection = db.get_collection("segments")
+        self.target_collection = db.get_collection("project_targets")
 
     async def get_project_by_id(self, project_id: str) -> ProjectPublic:
         doc = await self.project_collection.find_one({"_id": ObjectId(project_id)})
@@ -86,19 +88,16 @@ class ProjectService:
         payload_data = payload.model_dump(exclude_none=True)
         doc = {
             **payload_data,
-            "progress": 0,
-            "status": "upload_ready",
+            "status": "uploading",
             "video_source": None,
             "created_at": now,
-            "updated_at": now,
-            "owner_code": payload.owner_code,
         }
-
         result = await self.project_collection.insert_one(doc)
 
+        # 프로젝트 생성 시, 타겟(타겟 언어별 진행도) 생성
         project_id = str(result.inserted_id)
-        # 프로젝트 생성 시 파이프 라인도 생성
         await _create_default_pipeline(db=self.db, project_id=project_id)
+        await self._create_project_targets(project_id, payload.targetLanguages)
 
         return {"project_id": project_id}
 
@@ -125,3 +124,26 @@ class ProjectService:
             )
 
         return ProjectPublic.model_validate(doc)
+
+    async def _create_project_targets(
+        self, project_id: str, target_languages: List[str] | None
+    ) -> None:
+        if not target_languages:
+            return
+        now = datetime.now()
+        docs = []
+        for code in target_languages:
+            lang = (code or "").strip()
+            if not lang:
+                continue
+            docs.append(
+                {
+                    "project_id": project_id,
+                    "language_code": lang,
+                    "status": ProjectTargetStatus.PENDING.value,
+                    "progress": 0,
+                    "created_at": now,
+                }
+            )
+        if docs:
+            await self.target_collection.insert_many(docs)
