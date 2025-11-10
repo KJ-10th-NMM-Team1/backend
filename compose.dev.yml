@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: dupilot-app # ← 동일 이미지 재사용
     container_name: dupilot-backend
     working_dir: /workspace
     volumes:
@@ -31,6 +32,7 @@ services:
       # WATCHFILES_FORCE_POLLING: "1"
   worker:
     build: .
+    image: dupilot-app # ← 동일 이미지 재사용
     working_dir: /workspace
     command: python -m app.workers.video_worker
     # command: >
