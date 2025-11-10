@@ -183,7 +183,7 @@ async def login_with_google(
 
     response.set_cookie(
         key="access_token",
-        value=f"Bearer {access_token}",
+        value=f"Bearer{access_token}",
         httponly=True,
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,

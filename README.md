@@ -26,7 +26,6 @@ config - 설정 파일 모음
 CORS_ORIGINS=http://localhost:5173
 # Mongo (compose상 서비스명 mongo 기준)
 MONGO_URL_DEV=mongodb://root:example@mongo:27017/dupilot?authSource=admin
-# MONGO_URL_DEV=mongodb://root:example@mongo:27017/dupilot?authSource=admin
 # 미리보기 샘플(원하면 나중에 S3 presigned로 교체)
 SAMPLE_VIDEO_URL=https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4
 SAMPLE_AUDIO_URL=https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3
@@ -60,5 +59,16 @@ $ docker compose exec api bash -lc "uvicorn app.main:app --host 0.0.0.0 --port 8
 API 문서: http://localhost:8000/docs
 MongoDB: mongodb://localhost:27018
 중지 및 정리: docker compose down으로 컨테이너만 중지/삭제하며 데이터는 유지됩니다.
-로그 확인/디버깅: docker compose logs -f api 또는 docker compose logs mongo
+로그 확인/디버깅: docker compose logs -f --tail 20
 프로덕션 모드 전환: .env 파일에서 APP_ENV=prod로 변경합니다.
+
+## 프로덕션 docker.prod 스택 기동
+
+- `deploy/start_server.sh`는 `/home/ubuntu/app/docker.prod.yml`을 기준으로 `docker compose -f docker.prod.yml up -d --remove-orphans`를 실행합니다.
+- 이후 `docker compose -f docker.prod.yml logs -f` 출력을 `app.log`로 리다이렉션하여 백그라운드에서 남깁니다.
+- 수동으로 실행하려면 EC2 로그인 후 `/home/ubuntu/app`에서 다음 명령을 순서대로 실행하면 됩니다.
+
+```bash
+docker compose -f docker.prod.yml up -d --remove-orphans
+nohup docker compose -f docker.prod.yml logs -f > app.log 2>&1 &
+```

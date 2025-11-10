@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dupilot-backend
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:cached
+      - ~/.aws:/root/.aws:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    environment:
+      APP_ENV: prod
+      PYTHONPATH: /workspace
+      REDIS_URL: redis://redis:6379/0
+  worker:
+    build: .
+    working_dir: /workspace
+    command: python -m app.workers.video_worker
+    volumes:
+      - .:/workspace:cached
+      - ~/.aws:/root/.aws:ro
+      - ./worker-scratch:/tmp/dupilot-ingest
+    env_file:
+      - .env
+    environment:
+      APP_ENV: prod
+      PYTHONPATH: /workspace
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped

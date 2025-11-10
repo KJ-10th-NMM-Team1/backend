@@ -1,28 +1,24 @@
 #!/bin/bash
-
+set -euo pipefail
 
 APP_DIR="/home/ubuntu/app"
+COMPOSE_FILE="$APP_DIR/docker.prod.yml"
+LOG_FILE="$APP_DIR/app.log"
 
-# 2. 가상 환경(venv) 경로
-VENV_DIR="$APP_DIR/venv/bin/activate"
-
-# 3. (중요) 가상 환경 활성화
-#    BeforeInstall 단계에서 생성한 venv를 활성화합니다.
-echo "Activating virtual environment at $VENV_DIR..."
-if [ ! -f "$VENV_DIR" ]; then
-    echo "ERROR: Virtual environment not found at $VENV_DIR"
+if [ ! -f "$COMPOSE_FILE" ]; then
+    echo "ERROR: docker compose file not found: $COMPOSE_FILE"
     exit 1
 fi
-source "$VENV_DIR"
 
-# 4. 애플리케이션 코드가 있는 디렉토리로 이동
-cd $APP_DIR
+cd "$APP_DIR"
 
-# 시작 전 ingest 실행 (실패해도 서버는 계속 기동)
-# echo "Running glossary ingestion..."
-    # python script/ingest.py || echo "WARNING: glossary ingestion failed (continuing startup)"
+echo "Stopping any existing docker compose log tail (if running)..."
+pkill -f "docker compose -f $COMPOSE_FILE logs -f" >/dev/null 2>&1 || true
 
-# 5. FastAPI 서버를 백그라운드로 실행 (uvicorn)
-echo "Starting FastAPI server (uvicorn): $APP_DIR..."
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > "$APP_DIR/app.log" 2> "$APP_DIR/error.log" &
+echo "Starting Docker stack with $COMPOSE_FILE..."
+docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+
+echo "Streaming docker compose logs to $LOG_FILE..."
+nohup docker compose -f "$COMPOSE_FILE" logs -f > "$LOG_FILE" 2>&1 &
+
 echo "Life Cycle - ApplicationStart: complete."
