@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="/home/ubuntu/app"
-COMPOSE_FILE="$APP_DIR/docker.prod.yml"
+COMPOSE_FILE="$APP_DIR/docker-compose-prod.yml"
 LOG_FILE="$APP_DIR/app.log"
 
 if [ ! -f "$COMPOSE_FILE" ]; then

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="/home/ubuntu/app"
-COMPOSE_FILE="$APP_DIR/docker.prod.yml"
+COMPOSE_FILE="$APP_DIR/docker-compose-prod.yml"
 
 if [ ! -f "$COMPOSE_FILE" ]; then
   echo "docker compose 파일을 찾을 수 없습니다: $COMPOSE_FILE (이미 중지된 것으로 간주)"
