@@ -8,6 +8,7 @@ services:
     container_name: dupilot-backend
     working_dir: /workspace
     volumes:
+      - /etc/ssl/certs/global-bundle.pem:/etc/ssl/certs/global-bundle.pem:ro
       - .:/workspace:cached
       - ~/.aws:/root/.aws:ro
       - /etc/ssl/certs/global-bundle.pem:/etc/ssl/certs/global-bundle.pem:ro
@@ -28,6 +29,7 @@ services:
     working_dir: /workspace
     command: python -m app.workers.video_worker
     volumes:
+      - /etc/ssl/certs/global-bundle.pem:/etc/ssl/certs/global-bundle.pem:ro
       - .:/workspace:cached
       - ~/.aws:/root/.aws:ro
       - ./worker-scratch:/tmp/dupilot-ingest
