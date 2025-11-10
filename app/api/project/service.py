@@ -7,6 +7,7 @@ from ..project.models import (
     ProjectCreate,
     ProjectUpdate,
     ProjectPublic,
+    ProjectBase,
     ProjectOut,
     ProjectTargetStatus,
 )
@@ -85,20 +86,21 @@ class ProjectService:
 
     async def create_project(self, payload: ProjectCreate) -> str:
         now = datetime.now()
-        payload_data = payload.model_dump(exclude_none=True)
-        doc = {
-            **payload_data,
-            "status": "uploading",
-            "video_source": None,
-            "created_at": now,
-        }
+        base = ProjectBase(
+            owner_id=payload.owner_id,
+            title=payload.title,
+            source_type=payload.sourceType,
+            video_source=None,
+            source_language=payload.sourceLanguage,
+            status="uploading",
+            created_at=now,
+        )
+        doc = base.model_dump(exclude_none=True)
         result = await self.project_collection.insert_one(doc)
-
         # 프로젝트 생성 시, 타겟(타겟 언어별 진행도) 생성
         project_id = str(result.inserted_id)
-        await _create_default_pipeline(db=self.db, project_id=project_id)
         await self._create_project_targets(project_id, payload.targetLanguages)
-
+        await _create_default_pipeline(db=self.db, project_id=project_id)
         return {"project_id": project_id}
 
     async def update_project(self, payload: ProjectUpdate) -> ProjectPublic:

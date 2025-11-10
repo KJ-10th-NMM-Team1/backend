@@ -73,6 +73,7 @@ async def list_my_projects(
 async def list_projects(db: DbDep):
     # await db["projects"].delete_many({})
     docs = await db["projects"].find().sort("created_at", -1).to_list(length=None)
+    # print({"items": [ProjectOut.model_validate(doc) for doc in docs]})
     return {"items": [ProjectOut.model_validate(doc) for doc in docs]}
 
 
