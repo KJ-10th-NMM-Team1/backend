@@ -10,6 +10,7 @@ from .auth.router import auth_router
 from .voice.router import voice_router
 from .translate.routes import trans_router
 from .language.router import router as language_router
+from .user.router import user_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -25,3 +26,4 @@ api_router.include_router(auth_router)
 api_router.include_router(voice_router)
 api_router.include_router(trans_router)
 api_router.include_router(language_router)
+api_router.include_router(user_router)
