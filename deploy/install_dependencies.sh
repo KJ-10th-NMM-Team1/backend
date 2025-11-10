@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # --- (수정) 스크립트 자신의 위치를 기준으로 '루트 폴더' 찾기 ---
 # $BASH_SOURCE[0]는 이 스크립트 파일의 전체 경로를 의미합니다.
@@ -42,7 +43,7 @@ if [ -d "$APP_DIR" ]; then
     rm -rf "$VENV_DIR"
 fi
 echo "Create APP directory: $APP_DIR"
-mkdir -p $APP_DIR
+mkdir -p "$APP_DIR"
 
 echo "Create APP venv: $VENV_DIR..."
 python3.12 -m venv "$VENV_DIR"
