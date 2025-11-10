@@ -117,7 +117,8 @@ async def register_source(payload: RegisterRequest, request: Request, db: DbDep)
 @upload_router.post("/prepare-upload")
 async def prepare_file_upload(
     payload: PresignRequest,
-    # _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
+    _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
+    project_service: ProjectService = Depends(ProjectService),
 ):
     bucket = os.getenv("AWS_S3_BUCKET")
     if not bucket:
@@ -155,7 +156,7 @@ async def prepare_file_upload(
 async def finish_upload(
     db: DbDep,
     payload: UploadFinalize,
-    # _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
+    _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
     project_service: ProjectService = Depends(ProjectService),
 ):
     bucket = os.getenv("AWS_S3_BUCKET")
