@@ -11,7 +11,7 @@ import google.auth
 import httpx
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
-from .utils import vector_search, RetrievedDoc
+from .utils import RetrievedDoc
 
 load_dotenv()
 
@@ -63,10 +63,8 @@ Guidelines:
     def build_glossary_context(
         self, source_text: str, draft_translation: str, top_glossary: int
     ) -> str:
-        query = f"{source_text.strip()}\n\n{draft_translation.strip()}"
-        hits = vector_search(query, top_glossary)
-        blocks = [_format_glossary(doc) for doc in hits]
-        return "\n\n".join(blocks) if blocks else "자료 없음"
+        # TODO: glossary vector search 비활성화
+        return "자료 없음"
 
     async def correct(
         self,
