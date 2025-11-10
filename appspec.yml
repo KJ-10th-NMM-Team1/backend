@@ -31,7 +31,7 @@ hooks:
       runas: ubuntu
     - location: deploy/install_dependencies.sh
       timeout: 1000
-      runas: ubuntu
+      runas: root
   ApplicationStart:
     - location: deploy/start_server.sh # 새 서버 시작
       timeout: 300
