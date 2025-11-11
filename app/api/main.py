@@ -11,9 +11,9 @@ from .voice_samples.router import voice_samples_router
 from .me.router import me_router
 from .translate.routes import trans_router
 from .language.router import router as language_router
-from .user.routes import user_router
 from .project.target_routes import target_router
 from .assets.router import assets_router
+from .user.routes import user_router
 
 api_router = APIRouter(prefix="/api")
 
