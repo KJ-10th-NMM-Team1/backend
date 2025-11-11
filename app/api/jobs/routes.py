@@ -14,6 +14,7 @@ from ..auth.service import AuthService
 from ..auth.model import UserOut
 from ..voice_samples.service import VoiceSampleService
 from ..voice_samples.models import VoiceSampleUpdate
+from ..project.models import ProjectTargetUpdate, ProjectTargetStatus
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -142,10 +143,10 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
 
     stage = metadata["stage"]
     project_id = result.project_id
-    update_payload: dict[str, object] = {
-        "project_id": project_id,
-        "status": PipelineStatus.PROCESSING,
-    }
+    # update_payload: dict[str, object] = {
+    #     "project_id": project_id,
+    #     "status": PipelineStatus.PROCESSING,
+    # }
 
     # stage별, project 파이프라인 업데이트
     if stage == "downloaded":  # s3에서 불러오기 완료 (stt 시작)

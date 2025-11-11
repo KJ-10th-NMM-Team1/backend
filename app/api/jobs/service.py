@@ -393,7 +393,7 @@ async def enqueue_job(job: JobRead, voice_config: Optional[dict] = None) -> None
             detail="JOB_QUEUE_URL env not set",
         )
 
-    message_payload = _build_job_message(job)
+    message_payload = _build_job_message(job)  # in callback_url
     if voice_config:
         message_payload["voice_config"] = voice_config
     message_body = json.dumps(message_payload)
@@ -417,11 +417,11 @@ async def enqueue_job(job: JobRead, voice_config: Optional[dict] = None) -> None
         message_kwargs["MessageDeduplicationId"] = job.job_id
 
     try:
-        await asyncio.to_thread(_sqs_client.send_message, **message_kwargs)
+        response = await asyncio.to_thread(_sqs_client.send_message, **message_kwargs)
+        logger.info("SQS send_message response for job %s: %s", job.job_id, response)
     except (BotoCoreError, ClientError) as exc:
         if APP_ENV in {"dev", "development", "local"}:
             logger.error("SQS publish failed in %s env: %s", APP_ENV, exc)
-            return
         raise SqsPublishError("Failed to publish job message to SQS") from exc
 
 
