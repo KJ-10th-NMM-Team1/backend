@@ -71,6 +71,7 @@ async def list_my_projects(
 
 @project_router.get("/", summary="프로젝트 전체 목록")
 async def list_projects(db: DbDep):
+    # await db["projects"].delete_many({})
     pipeline = [
         {"$addFields": {"project_id_str": {"$toString": "$_id"}}},
         {"$sort": {"created_at": -1}},
@@ -80,7 +81,6 @@ async def list_projects(db: DbDep):
                 "let": {"pid": "$project_id_str"},
                 "pipeline": [
                     {"$match": {"$expr": {"$eq": ["$project_id", "$$pid"]}}},
-                    # "_id"를 제거하지 말고 나머지 필드만 제한하고 싶다면 project에서 다른 것만 지정
                     {
                         "$project": {
                             "project_id": 1,
@@ -95,14 +95,17 @@ async def list_projects(db: DbDep):
         },
         {"$addFields": {"targets": {"$ifNull": ["$targets", []]}}},
     ]
-    # await db["projects"].delete_many({})
     docs = await db["projects"].aggregate(pipeline).to_list(length=None)
     # print({"items": [ProjectOut.model_validate(doc) for doc in docs]})
     return {"items": [ProjectOut.model_validate(doc) for doc in docs]}
 
 
 @project_router.get("/{project_id}", summary="프로젝트 상세 조회")
-async def get_project(project_id: str, db: DbDep):
+async def get_project(
+    project_id: str,
+    db: DbDep,
+    project_service: ProjectService = Depends(ProjectService),
+):
     try:
         project_oid = ObjectId(project_id)
     except InvalidId as exc:
@@ -124,30 +127,31 @@ async def get_project(project_id: str, db: DbDep):
     )
     project["targets"] = targets
 
-    segments = (
-        await db["segments"]
-        .find({"project_id": project_oid})
-        .sort("segment_index", 1)
-        .to_list(length=None)
-    )
-    segment_ids = [seg["_id"] for seg in segments]
+    # segments = (
+    #     await db["segments"]
+    #     .find({"project_id": project_oid})
+    #     .sort("segment_index", 1)
+    #     .to_list(length=None)
+    # )
+    # segment_ids = [seg["_id"] for seg in segments]
 
-    issues = (
-        await db["issues"]
-        .find({"segment_id": {"$in": segment_ids}})
-        .to_list(length=None)
-    )
+    # issues = (
+    #     await db["issues"]
+    #     .find({"segment_id": {"$in": segment_ids}})
+    #     .to_list(length=None)
+    # )
 
-    issues_by_segment: dict[ObjectId, list[dict[str, Any]]] = {}
-    for issue in issues:
-        issues_by_segment.setdefault(issue["segment_id"], []).append(issue)
+    # issues_by_segment: dict[ObjectId, list[dict[str, Any]]] = {}
+    # for issue in issues:
+    #     issues_by_segment.setdefault(issue["segment_id"], []).append(issue)
 
-    for segment in segments:
-        seg_id = segment["_id"]
-        segment["issues"] = issues_by_segment.get(seg_id, [])
-    project["segments"] = segments
-    serialized = _serialize(project)
-    return serialized
+    # for segment in segments:
+    #     seg_id = segment["_id"]
+    #     segment["issues"] = issues_by_segment.get(seg_id, [])
+    # project["segments"] = segments
+    # serialized = _serialize(project)
+    # return ProjectOut.model_validate(project)
+    return ProjectOut.model_validate(project)
 
 
 @project_router.delete("/{project_id}", response_model=int, summary="프로젝트 삭제")

@@ -36,13 +36,13 @@ class ProjectBase(BaseModel):
     video_source: str | None = None
     source_language: Optional[str] = None
     target_languages: List[str] = []
+    created_at: datetime
 
 
 class ProjectPublic(ProjectBase):
     project_id: str
     thumbnail: ProjectThumbnail | None = None
     glosary_id: Optional[str] = None
-    created_at: datetime
     duration_seconds: Optional[int] = None
 
 
@@ -91,10 +91,11 @@ class ProjectOut(BaseModel):
     status: str
     video_source: str | None
     thumbnail: ProjectThumbnail | None = None
-    created_at: datetime
     duration_seconds: Optional[int] | None = None
     issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드
     targets: list[ProjectTarget] = Field(default_factory=list)
+    source_language: Optional[str] = None
+    created_at: datetime
 
 
 class EditorPlaybackState(BaseModel):

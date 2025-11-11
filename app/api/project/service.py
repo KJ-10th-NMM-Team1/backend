@@ -101,9 +101,6 @@ class ProjectService:
         # 프로젝트 생성 시, 타겟(타겟 언어별 진행도) 생성
         project_id = str(result.inserted_id)
         await self._create_project_targets(project_id, payload.targetLanguages)
-
-        # 파이프라인 진행도 -> 타겟 별 진행도 (project_targets 컬렉션) 변경 진행 중
-        # await _create_default_pipeline(db=self.db, project_id=project_id)
         return {"project_id": project_id}
 
     async def update_project(self, payload: ProjectUpdate) -> ProjectPublic:
@@ -155,7 +152,7 @@ class ProjectService:
 
     async def get_targets_by_project(
         self, project_id: str, language_code: str | None = None
-    ) -> List[ProjectTarget]:
+    ) -> list[ProjectTarget]:
         query = {"project_id": project_id}
         if language_code:
             query["language_code"] = language_code

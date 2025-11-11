@@ -24,14 +24,15 @@ async def finalize_ingest(
         duration_seconds=duration_seconds,
     )
     project = await project_service.update_project(payload=update_payload)
-
     await start_job(project, worker_db)
-    await update_pipeline_stage(
-        worker_db,
-        PipelineUpdate(
-            project_id=project_id,
-            stage_id="upload",
-            status=PipelineStatus.COMPLETED,
-            progress=100,
-        ),
-    )
+
+    # pipeline -> project_target 으로 변경
+    # await update_pipeline_stage(
+    #     worker_db,
+    #     PipelineUpdate(
+    #         project_id=project_id,
+    #         stage_id="upload",
+    #         status=PipelineStatus.COMPLETED,
+    #         progress=100,
+    #     ),
+    # )
