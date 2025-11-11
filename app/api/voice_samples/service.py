@@ -291,13 +291,6 @@ class VoiceSampleService:
                 detail="You can only delete your own voice samples",
             )
 
-        # 공개 샘플은 삭제 불가
-        if sample.get("is_public", False):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Public voice samples cannot be deleted",
-            )
-
         try:
             # 샘플 삭제
             result = await self.collection.delete_one({"_id": sample_oid})
