@@ -72,3 +72,33 @@ MongoDB: mongodb://localhost:27018
 docker compose -f docker.prod.yml up -d --remove-orphans
 nohup docker compose -f docker.prod.yml logs -f > app.log 2>&1 &
 ```
+
+## Segment Translations Feature
+
+### Overview
+The system now supports per-language segment translations stored in the `segment_translations` collection. When TTS processing completes, the system automatically:
+
+1. Creates `project_segments` (only for the first target language)
+2. Creates or updates `segment_translations` for each target language
+3. Stores translated text and audio URLs for each segment
+
+### Database Collections
+
+- **project_segments**: Source segments with original text and timing
+  - Created once per project (when first target language is processed)
+  - Fields: project_id, speaker_tag, start, end, source_text, segment_index
+
+- **segment_translations**: Translations for each segment per language
+  - Created for each target language
+  - Fields: segment_id, language_code, target_text, segment_audio_url
+  - Upserted to avoid duplicates
+
+### Testing
+
+```bash
+# Test segment translations creation
+python test_segment_translations.py
+
+# Migrate existing data to segment_translations
+python scripts/migrate_segment_translations.py
+```

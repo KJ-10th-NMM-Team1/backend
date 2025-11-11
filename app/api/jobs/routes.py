@@ -96,7 +96,7 @@ async def check_and_create_segments(
     segments: list,
     target_lang: str,
 ) -> bool:
-    """세그먼트 생성 - 첫 번째 타겟 언어일 때만 생성"""
+    """세그먼트 생성 - 첫 번째 타겟 언어일 때만 project_segments 생성, 번역은 항상 생성"""
     segment_service = SegmentService(db)
 
     # 이미 세그먼트가 있는지 확인
@@ -105,10 +105,13 @@ async def check_and_create_segments(
     except Exception:
         existing_segments = None
 
+    now = datetime.now()
+    segments_created = False
+    segment_ids_map = {}  # segment_index -> _id 매핑
+
     # 기존 세그먼트가 없으면 생성
     if not existing_segments:
         segments_to_create = []
-        now = datetime.now()
 
         for i, seg in enumerate(segments):
             # 워커에서 오는 데이터 필드 매핑
@@ -142,15 +145,76 @@ async def check_and_create_segments(
 
         if segments_to_create:
             try:
-                await db["project_segments"].insert_many(segments_to_create)
+                result = await db["project_segments"].insert_many(segments_to_create)
+                # 생성된 segment ID 저장
+                for idx, seg_id in enumerate(result.inserted_ids):
+                    segment_ids_map[segments_to_create[idx]["segment_index"]] = seg_id
+
                 logger.info(f"Created {len(segments_to_create)} segments for project {project_id}")
-                return True
+                segments_created = True
             except Exception as exc:
                 logger.error(f"Failed to create segments: {exc}")
                 return False
     else:
-        logger.info(f"Segments already exist for project {project_id}, skipping creation")
-        return False
+        # 기존 세그먼트가 있으면 ID 매핑만 생성
+        for seg in existing_segments:
+            segment_ids_map[seg.get("segment_index", 0)] = seg["_id"]
+        logger.info(f"Using existing {len(existing_segments)} segments for project {project_id}")
+
+    # 번역 세그먼트 생성 (타겟 언어별로 생성)
+    if segments and target_lang:
+        translations_to_create = []
+
+        for i, seg in enumerate(segments):
+            # segment_index 결정
+            seg_index = i
+            if "seg_idx" in seg:
+                seg_index = int(seg["seg_idx"])
+            elif "segment_id" in seg:
+                try:
+                    seg_index = int(seg["segment_id"])
+                except (ValueError, TypeError):
+                    seg_index = i
+
+            # 해당 segment의 _id 찾기
+            segment_obj_id = segment_ids_map.get(seg_index)
+            if not segment_obj_id:
+                logger.warning(f"Cannot find segment_id for index {seg_index}, skipping translation")
+                continue
+
+            # 번역된 텍스트 추출
+            # 워커에서 prompt_text가 번역된 텍스트임 (주석 참고)
+            # prompt_text는 TTS에 사용된 텍스트로, 번역된 텍스트가 들어있음
+            translated_text = seg.get("prompt_text", "")
+            audio_url = seg.get("audio_file")  # TTS 오디오 파일 경로
+
+            translation_data = {
+                "segment_id": str(segment_obj_id),
+                "language_code": target_lang,
+                "target_text": translated_text,
+                "segment_audio_url": audio_url,
+                "created_at": now,
+                "updated_at": now,
+            }
+            translations_to_create.append(translation_data)
+
+        if translations_to_create:
+            try:
+                # 기존 번역이 있는지 확인하고 업데이트 또는 생성
+                for trans in translations_to_create:
+                    await db["segment_translations"].update_one(
+                        {
+                            "segment_id": trans["segment_id"],
+                            "language_code": trans["language_code"]
+                        },
+                        {"$set": trans},
+                        upsert=True
+                    )
+                logger.info(f"Created/Updated {len(translations_to_create)} translations for language {target_lang}")
+            except Exception as exc:
+                logger.error(f"Failed to create segment translations: {exc}")
+
+    return segments_created or len(existing_segments) > 0
 
 
 async def process_tts_completion(
@@ -159,20 +223,27 @@ async def process_tts_completion(
     metadata: dict,
     result_key: str,
 ) -> None:
-    """TTS 완료 시 처리: asset 생성, 세그먼트 생성"""
+    """TTS 완료 시 처리: asset 생성, 세그먼트 생성, 번역 저장"""
     target_lang = metadata.get("target_lang")
     if not target_lang:
         logger.warning(f"No target_lang in tts_completed metadata for project {project_id}")
         return
 
-    # 1. Asset 생성
+    logger.info(f"Processing TTS completion for project {project_id}, language {target_lang}")
+
+    # 1. Asset 생성 (완성된 더빙 비디오)
     if result_key:
         await create_asset_from_result(db, project_id, target_lang, result_key)
 
-    # 2. 세그먼트 생성 (첫 번째 타겟 언어일 때만)
+    # 2. 세그먼트 및 번역 생성
+    # - 첫 번째 타겟 언어일 때: project_segments + segment_translations 생성
+    # - 추가 타겟 언어일 때: segment_translations만 생성 또는 업데이트
     segments = metadata.get("segments", [])
     if segments:
+        logger.info(f"Processing {len(segments)} segments for {target_lang}")
         await check_and_create_segments(db, project_id, segments, target_lang)
+    else:
+        logger.warning(f"No segments in metadata for project {project_id}, language {target_lang}")
 
 
 async def tts_complete_processing(db, project_id, segments):
