@@ -30,6 +30,7 @@ from app.config.redis import get_redis
 from app.workers.jobs.video_ingest import run_ingest
 from app.utils.thumbnail import extract_and_upload_thumbnail, ThumbnailError
 from pathlib import Path
+from moviepy.editor import VideoFileClip
 
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
 
@@ -166,6 +167,7 @@ async def finish_upload(
 
     thumbnail_payload: ProjectThumbnail | None = None
     suffix = Path(payload.object_key).suffix or ".mp4"
+    duration_seconds = None
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
         tmp_path = Path(tmp_file.name)
     try:
@@ -181,6 +183,9 @@ async def finish_upload(
                 thumbnail_payload = ProjectThumbnail(
                     kind="s3", key=thumbnail_key, url=None
                 )
+                clip = VideoFileClip(str(tmp_path))
+                duration_seconds = int(round(clip.duration or 0))
+                clip.close()                
             except ThumbnailError:
                 thumbnail_payload = None
     finally:
@@ -194,6 +199,7 @@ async def finish_upload(
         status="uploaded",
         video_source=payload.object_key,
         thumbnail=thumbnail_payload,
+        duration_seconds=duration_seconds
     )
     try:
         get_pipeline_status(db, update_payload.project_id)
