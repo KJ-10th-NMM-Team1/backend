@@ -1,6 +1,7 @@
 # app/api/routes/upload.py
 import os
 import asyncio
+import logging
 import tempfile
 import logging
 from uuid import uuid4
@@ -14,7 +15,7 @@ from rq import Queue
 from pymongo.errors import PyMongoError
 from botocore.exceptions import ClientError
 
-from app.api.jobs.service import start_job
+from app.api.jobs.service import start_job, start_jobs_for_targets
 from app.api.project.service import ProjectService
 from app.config.s3 import s3
 from ..deps import DbDep
@@ -33,6 +34,7 @@ from app.utils.thumbnail import extract_and_upload_thumbnail, ThumbnailError
 from pathlib import Path
 from moviepy.editor import VideoFileClip
 
+logger = logging.getLogger(__name__)
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
 logger = logging.getLogger("api_logger")
 
@@ -219,16 +221,20 @@ async def finish_upload(
             detail="Failed to update project",
         ) from exc
 
-    await start_job(result, db)
-    # await update_pipeline_stage(
-    #     db,
-    #     PipelineUpdate(
-    #         project_id=payload.project_id,
-    #         stage_id="upload",
-    #         status=PipelineStatus.COMPLETED,
-    #         progress=100,
-    #     ),
-    # )
+    # 프로젝트의 타겟 언어들 가져오기
+    targets = await project_service.get_targets_by_project(payload.project_id)
+    if targets:
+        target_languages = [target.get("language_code") for target in targets if target.get("language_code")]
+        if target_languages:
+            # 타겟 언어별로 job 생성
+            jobs = await start_jobs_for_targets(result, target_languages, db)
+            logger.info(f"Created {len(jobs)} jobs for project {payload.project_id}")
+        else:
+            # 타겟 언어가 없으면 기존 방식 사용
+            await start_job(result, db)
+    else:
+        # 타겟이 없으면 기존 방식 사용
+        await start_job(result, db)
 
     return result
 

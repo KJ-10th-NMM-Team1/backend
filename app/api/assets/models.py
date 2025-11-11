@@ -15,6 +15,7 @@ class AssetType(str, Enum):
     PREVIEW = "preview_video"
     SUBTITLE = "subtitle_srt"
     DUBBED_AUDIO = "dubbed_audio"
+    DUBBED_VIDEO = "dubbed_video"  # 완성된 더빙 비디오
 
 
 class AssetBase(BaseModel):

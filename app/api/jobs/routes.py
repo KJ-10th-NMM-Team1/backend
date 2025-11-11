@@ -15,6 +15,9 @@ from ..auth.model import UserOut
 from ..voice_samples.service import VoiceSampleService
 from ..voice_samples.models import VoiceSampleUpdate
 from ..project.models import ProjectTargetUpdate, ProjectTargetStatus
+from ..project.service import ProjectService
+from ..assets.service import AssetService
+from ..assets.models import AssetCreate, AssetType
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -38,6 +41,26 @@ async def dispatch_pipeline(project_id: str, update_payload):
         await queue.put(event)
 
 
+async def dispatch_target_update(
+    project_id: str,
+    language_code: str,
+    target_status: ProjectTargetStatus,
+    progress: int,
+):
+    """project_target 업데이트를 SSE로 브로드캐스트"""
+    listeners = project_channels.get(project_id, set())
+    event = {
+        "project_id": project_id,
+        "type": "target_update",
+        "language_code": language_code,
+        "status": target_status.value,
+        "progress": progress,
+        "timestamp": datetime.now().isoformat() + "Z",
+    }
+    for queue in list(listeners):
+        await queue.put(event)
+
+
 async def update_pipeline(db, project_id, payload):
     # 파이프라인 디비 수정
     await update_pipeline_stage(db, PipelineUpdate(**payload))
@@ -45,33 +68,117 @@ async def update_pipeline(db, project_id, payload):
     await dispatch_pipeline(project_id, payload)
 
 
-async def pretts_complete_processing(db, project_id, segments):
+async def create_asset_from_result(
+    db: DbDep,
+    project_id: str,
+    target_lang: str,
+    result_key: str,
+) -> None:
+    """완료된 비디오에 대한 asset 생성"""
+    try:
+        asset_service = AssetService(db)
+        asset_payload = AssetCreate(
+            project_id=project_id,
+            language_code=target_lang,
+            asset_type=AssetType.DUBBED_VIDEO,
+            file_path=result_key,
+        )
+        await asset_service.create_asset(asset_payload)
+        logger.info(f"Created asset for project {project_id}, language {target_lang}")
+    except Exception as exc:
+        logger.error(f"Failed to create asset: {exc}")
+
+
+async def check_and_create_segments(
+    db: DbDep,
+    project_id: str,
+    segments: list,
+    target_lang: str,
+) -> bool:
+    """세그먼트 생성 - 첫 번째 타겟 언어일 때만 생성"""
+    segment_service = SegmentService(db)
+
+    # 이미 세그먼트가 있는지 확인
+    try:
+        existing_segments = await segment_service.get_segments_by_project(project_id)
+    except Exception:
+        existing_segments = None
+
+    # 기존 세그먼트가 없으면 생성
+    if not existing_segments:
+        segments_to_create = []
+        now = datetime.now()
+
+        for i, seg in enumerate(segments):
+            # 워커에서 오는 데이터 필드 매핑
+            # seg에 포함된 필드들:
+            # - segment_id, seg_idx, speaker, start, end, target_duration
+            # - audio_file, voice_sample, prompt_text, tts_backend
+
+            segment_data = {
+                "project_id": project_id,
+                "speaker_tag": seg.get("speaker", ""),
+                "start": float(seg.get("start", 0)),
+                "end": float(seg.get("end", 0)),
+                "source_text": seg.get("prompt_text", ""),  # prompt_text가 원본 텍스트
+                "is_verified": False,
+                "created_at": now,
+                "updated_at": now,
+            }
+
+            # segment_index 추가 (순서 보장)
+            if "seg_idx" in seg:
+                segment_data["segment_index"] = int(seg["seg_idx"])
+            elif "segment_id" in seg:
+                try:
+                    segment_data["segment_index"] = int(seg["segment_id"])
+                except (ValueError, TypeError):
+                    segment_data["segment_index"] = i
+            else:
+                segment_data["segment_index"] = i
+
+            segments_to_create.append(segment_data)
+
+        if segments_to_create:
+            try:
+                await db["project_segments"].insert_many(segments_to_create)
+                logger.info(f"Created {len(segments_to_create)} segments for project {project_id}")
+                return True
+            except Exception as exc:
+                logger.error(f"Failed to create segments: {exc}")
+                return False
+    else:
+        logger.info(f"Segments already exist for project {project_id}, skipping creation")
+        return False
+
+
+async def process_tts_completion(
+    db: DbDep,
+    project_id: str,
+    metadata: dict,
+    result_key: str,
+) -> None:
+    """TTS 완료 시 처리: asset 생성, 세그먼트 생성"""
+    target_lang = metadata.get("target_lang")
+    if not target_lang:
+        logger.warning(f"No target_lang in tts_completed metadata for project {project_id}")
+        return
+
+    # 1. Asset 생성
+    if result_key:
+        await create_asset_from_result(db, project_id, target_lang, result_key)
+
+    # 2. 세그먼트 생성 (첫 번째 타겟 언어일 때만)
+    segments = metadata.get("segments", [])
+    if segments:
+        await check_and_create_segments(db, project_id, segments, target_lang)
+
+
+async def tts_complete_processing(db, project_id, segments):
+    """기존 호환성 유지를 위한 함수"""
     # 세그먼트 Insert_many
     segment_service = SegmentService(db)
     await segment_service.insert_segments_from_metadata(project_id, segments)
-
-    # rag processing - 50
-    rag_payload = {
-        "project_id": project_id,
-        "stage_id": "rag",
-        "status": PipelineStatus.PROCESSING,
-        "progress": 50,
-    }
-    await update_pipeline(db, project_id, rag_payload)
-
-    # rag 실행
-    try:
-        # project_id의 세그먼트에 대해 이슈생성
-        await suggestion_by_project(db, project_id)
-    except Exception:
-        rag_payload["status"] = PipelineStatus.FAILED
-        rag_payload["progress"] = 0
-        await update_pipeline(db, project_id, rag_payload)
-        raise
-    else:
-        rag_payload["status"] = PipelineStatus.COMPLETED
-        rag_payload["progress"] = 100
-    return rag_payload
 
 
 @router.post("/{job_id}/status", response_model=JobRead)
@@ -143,59 +250,89 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
 
     stage = metadata["stage"]
     project_id = result.project_id
-    # update_payload: dict[str, object] = {
-    #     "project_id": project_id,
-    #     "status": PipelineStatus.PROCESSING,
-    # }
 
-    # stage별, project 파이프라인 업데이트
+    # metadata에서 language_code 추출 (target_lang)
+    language_code = metadata.get("target_lang") or metadata.get("language_code")
+
+    # 특정 stage에서는 language_code가 필요하지 않을 수 있음
+    language_independent_stages = ["downloaded", "stt_completed"]
+
+    if not language_code and stage not in language_independent_stages:
+        logger.warning(f"No target_lang in metadata for job {job_id}, stage {stage}")
+        # language_code가 없는 경우, project의 첫 번째 target language 사용 시도
+        try:
+            project_service = ProjectService(db)
+            targets = await project_service.get_targets_by_project(project_id)
+            if targets:
+                language_code = targets[0].get("language_code")
+                logger.info(
+                    f"Using first target language {language_code} for job {job_id}"
+                )
+        except Exception as exc:
+            logger.error(f"Failed to get project targets: {exc}")
+
+    if not language_code and stage not in language_independent_stages:
+        logger.error(f"Cannot determine language_code for job {job_id}, stage {stage}")
+        return result
+
+    # ProjectService 인스턴스 생성
+    project_service = ProjectService(db)
+
+    # stage별 project_target 업데이트를 위한 payload
+    target_update = None
+
+    # stage별, project target 업데이트
     if stage == "downloaded":  # s3에서 불러오기 완료 (stt 시작)
-        update_payload.update(
-            stage_id="stt",
-            progress=0,
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.PROCESSING, progress=0
         )
     elif stage == "stt_completed":  # stt 완료
-        update_payload.update(
-            stage_id="stt",
-            progress=100,
-            status=PipelineStatus.COMPLETED,
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.PROCESSING, progress=20  # STT 완료 시 20%
         )
-
     elif stage == "mt_prepare":
-        update_payload.update(
-            stage_id="mt",
-            progress=0,
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.PROCESSING, progress=25  # MT 시작 시 25%
         )
     elif stage == "mt_completed":  # mt 완료
-        update_payload.update(
-            stage_id="mt",
-            progress=100,
-            status=PipelineStatus.COMPLETED,
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.PROCESSING, progress=50  # MT 완료 시 50%
         )
-        await update_pipeline(db, project_id, update_payload)
+    elif stage == "tts_prepare":  # TTS 시작
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.PROCESSING, progress=55  # TTS 시작 시 55%
+        )
+    elif stage == "tts_completed":  # TTS 완료 - 최종 완료 처리
+        # 새로운 처리 함수 호출: asset 생성 및 세그먼트 생성
+        await process_tts_completion(db, project_id, metadata, result.result_key)
 
-        update_payload = {
-            "project_id": project_id,
-            "stage_id": "rag",
-            "status": PipelineStatus.PROCESSING,
-            "progress": 0,
-        }
-    elif stage == "tts_completed":  # pre-tts 완료
-        segments = metadata.get("segments", [])
-        update_payload = await pretts_complete_processing(db, project_id, segments)
-    elif stage == "tts2_prepare":  # tts2: 최종 tts
-        update_payload.update(
-            stage_id="tts",
-            progress=0,
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.COMPLETED, progress=100  # TTS 완료
         )
-    elif stage == "tts2_completed":
-        update_payload.update(
-            stage_id="tts",
-            progress=100,
-            status=PipelineStatus.COMPLETED,
+    elif stage == "failed":  # 실패
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.FAILED, progress=0
         )
 
-    if update_payload.get("stage_id"):
-        await update_pipeline(db, project_id, update_payload)
+    # project_target 업데이트 실행
+    if target_update:
+        try:
+            # language_code가 있으면 해당 언어만 업데이트
+            if language_code:
+                await project_service.update_targets_by_project_and_language(
+                    project_id, language_code, target_update
+                )
+                logger.info(
+                    f"Updated project_target for project {project_id}, language {language_code}, stage {stage}"
+                )
+                # SSE 이벤트 브로드캐스트
+                await dispatch_target_update(
+                    project_id,
+                    language_code,
+                    target_update.status or ProjectTargetStatus.PROCESSING,
+                    target_update.progress or 0,
+                )
+        except Exception as exc:
+            logger.error(f"Failed to update project_target: {exc}")
 
     return result
