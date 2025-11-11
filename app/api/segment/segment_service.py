@@ -6,7 +6,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..deps import DbDep
 from .model import ResponseSegment, RequestSegment
-from ..project.models import SegmentTranslationResponse, ProjectSegmentCreate, SegmentTranslationCreate
+from ..project.models import (
+    SegmentTranslationResponse,
+    ProjectSegmentCreate,
+    SegmentTranslationCreate,
+)
+
 
 class SegmentService:
     def __init__(self, db: DbDep):
@@ -22,7 +27,7 @@ class SegmentService:
             "source_lang": 1,
             "video_source": 1,
         }
-        self.translation_collection = db.get_collection("segment_translations")        
+        self.translation_collection = db.get_collection("segment_translations")
 
     async def test_save_segment(self, request: RequestSegment, db_name: str):
         project_oid = ObjectId(request.project_id)
@@ -183,35 +188,40 @@ class SegmentService:
 
         return normalized
 
-
     async def get_project_segment_translations(
         self,
         project_id: str,
         language_code: str,
     ) -> list[SegmentTranslationResponse]:
-        project_oid = ObjectId(project_id)
-
+        # project_oid = ObjectId(project_id)
         segments = await self.segment_collection.find(
-            {"project_id": project_oid}
+            {"project_id": project_id}
         ).to_list(None)
+
+        print("segments:", segments)
 
         if not segments:
             return []
 
-        segment_ids = [seg["_id"] for seg in segments]
+        # segment_id는 문자열로 저장되어 있으므로 문자열 배열로 만들기
+        segment_ids = [str(seg["_id"]) for seg in segments]
 
         translations = await self.translation_collection.find(
             {"segment_id": {"$in": segment_ids}, "language_code": language_code}
         ).to_list(None)
 
+        print("translations:", translations)
+
+        # translation_map의 키도 문자열로
         translation_map = {doc["segment_id"]: doc for doc in translations}
 
         result = []
         for seg in segments:
+            segment_id_str = str(seg["_id"])  # 문자열로 변환
             merged = {
                 "id": seg["_id"],
                 **seg,
-                **translation_map.get(seg["_id"], {}),
+                **translation_map.get(segment_id_str, {}),  # 문자열 키로 조회
                 "language_code": language_code,
             }
             result.append(SegmentTranslationResponse(**merged))
@@ -250,11 +260,12 @@ class SegmentService:
         if not segment:
             raise HTTPException(status_code=404, detail="segment not found")
 
-        now = datetime.now(timezone.utc),
+        now = datetime.now(timezone.utc)
         doc = payload.model_dump(exclude_none=True)
         doc.setdefault("created_at", now)
         doc.setdefault("updated_at", now)
-        doc["segment_id"] = segment_oid
+        # segment_id는 문자열로 저장 (일관성 유지)
+        doc["segment_id"] = str(segment_oid)
         doc["project_id"] = project_oid
 
         result = await self.translation_collection.insert_one(doc)

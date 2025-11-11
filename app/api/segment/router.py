@@ -15,11 +15,12 @@ from ..jobs.service import start_segment_tts_job
 segment_router = APIRouter(prefix="/segment", tags=["segment"])
 editor_segment_router = APIRouter(prefix="/editor/projects", tags=["segment"])
 
+
 @segment_router.get("/{project_id}", response_model=List[ResponseSegment])
 async def get_segment_all(
     project_id: str, service: SegmentService = Depends(SegmentService)
 ):
-    find_list = await service.find_segment(project_id)
+    find_list = await service.find_all_segment(project_id)
     return find_list
 
 

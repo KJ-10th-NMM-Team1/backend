@@ -12,10 +12,10 @@ PyObjectId = Annotated[
 
 
 class AssetType(str, Enum):
-    PREVIEW = "preview_video"
+    PREVIEW = "preview_video"  # 기계 더빙 완성 비디오
     SUBTITLE = "subtitle_srt"
-    DUBBED_AUDIO = "dubbed_audio"
-    DUBBED_VIDEO = "dubbed_video"  # 완성된 더빙 비디오
+    # DUBBED_AUDIO = "dubbed_audio"
+    # DUBBED_VIDEO = "dubbed_video"  # temp 에러방지용
 
 
 class AssetBase(BaseModel):
