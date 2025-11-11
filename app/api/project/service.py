@@ -3,15 +3,18 @@ from datetime import datetime
 from typing import Optional, List
 from bson import ObjectId
 from ..deps import DbDep
-from ..project.models import (
+from .models import (
     ProjectCreate,
     ProjectUpdate,
     ProjectPublic,
     ProjectBase,
     ProjectOut,
     ProjectTargetStatus,
+    ProjectTarget,
+    ProjectTargetUpdate,
 )
-from ..pipeline.service import _create_default_pipeline
+
+# from ..pipeline.service import _create_default_pipeline
 
 
 class ProjectService:
@@ -80,6 +83,33 @@ class ProjectService:
             result.append(ProjectOut.model_validate(doc))
         return result
 
+    async def list_projects_with_targets(self) -> List[ProjectOut]:
+        pipeline = [
+            {"$addFields": {"project_id_str": {"$toString": "$_id"}}},
+            {"$sort": {"created_at": -1}},
+            {
+                "$lookup": {
+                    "from": "project_targets",
+                    "let": {"pid": "$project_id_str"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$project_id", "$$pid"]}}},
+                        {
+                            "$project": {
+                                "project_id": 1,
+                                "language_code": 1,
+                                "status": 1,
+                                "progress": 1,
+                            }
+                        },
+                    ],
+                    "as": "targets",
+                }
+            },
+            {"$addFields": {"targets": {"$ifNull": ["$targets", []]}}},
+        ]
+        docs = await self.project_collection.aggregate(pipeline).to_list(length=None)
+        return [ProjectOut.model_validate(doc) for doc in docs]
+
     async def delete_project(self, project_id: str) -> int:
         result = await self.project_collection.delete_one({"_id": project_id})
         return result.deleted_count
@@ -94,13 +124,13 @@ class ProjectService:
             source_language=payload.sourceLanguage,
             status="uploading",
             created_at=now,
+            speaker_count=payload.speakerCount,
         )
         doc = base.model_dump(exclude_none=True)
         result = await self.project_collection.insert_one(doc)
         # 프로젝트 생성 시, 타겟(타겟 언어별 진행도) 생성
         project_id = str(result.inserted_id)
         await self._create_project_targets(project_id, payload.targetLanguages)
-        await _create_default_pipeline(db=self.db, project_id=project_id)
         return {"project_id": project_id}
 
     async def update_project(self, payload: ProjectUpdate) -> ProjectPublic:
@@ -149,3 +179,36 @@ class ProjectService:
             )
         if docs:
             await self.target_collection.insert_many(docs)
+
+    async def get_targets_by_project(
+        self, project_id: str, language_code: str | None = None
+    ) -> list[ProjectTarget]:
+        query = {"project_id": project_id}
+        if language_code:
+            query["language_code"] = language_code
+        docs = await self.target_collection.find(query).to_list(length=None)
+
+        result = []
+        for doc in docs:
+            doc["target_id"] = str(doc["_id"])
+            result.append(ProjectTarget.model_validate(doc))
+        return result
+
+    async def update_targets(
+        self, target_id: str, payload: ProjectTargetUpdate
+    ) -> List[ProjectTarget]:
+        doc = await self.target_collection.find_one({"_id": ObjectId(target_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Target not found")
+
+        update_data = payload.model_dump(exclude_none=True)
+        update_data["updated_at"] = datetime.now()
+        await self.target_collection.update_one(
+            {"_id": ObjectId(target_id)},
+            {"$set": update_data},
+            # {"$set": {**update_data, "project_id": doc["project_id"]}},
+        )
+        doc = await self.target_collection.find_one({"_id": ObjectId(target_id)})
+        doc["target_id"] = str(doc["_id"])
+
+        return doc

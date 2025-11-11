@@ -35,15 +35,16 @@ class ProjectBase(BaseModel):
     source_type: str  # 'file' | 'youtube'
     video_source: str | None = None
     source_language: Optional[str] = None
+    target_languages: List[str] = []
     created_at: datetime
-    duration_seconds: Optional[int] = None
+    speaker_count: Optional[int] = None
 
 
 class ProjectPublic(ProjectBase):
     project_id: str
     thumbnail: ProjectThumbnail | None = None
     glosary_id: Optional[str] = None
-    # segments: Optional[List[Dict[str, Any]]] = None
+    duration_seconds: Optional[int] = None
 
 
 class ProjectCreateResponse(BaseModel):
@@ -84,19 +85,24 @@ class ProjectTarget(BaseModel):
     status: ProjectTargetStatus
     progress: int
 
+
+class ProjectTargetUpdate(BaseModel):
+    status: Optional[ProjectTargetStatus] = None
+    progress: Optional[int] = None
+
+
 class ProjectOut(BaseModel):
     id: PyObjectId = Field(validation_alias="_id")
     title: str
     status: str
     video_source: str | None
     thumbnail: ProjectThumbnail | None = None
-    created_at: datetime
     duration_seconds: Optional[int] | None = None
-    # segment_assets_prefix: Optional[str] = None
-    # segments: Optional[List[Dict[str, Any]]] = None
-    # owner_id: str
     issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드
     targets: list[ProjectTarget] = Field(default_factory=list)
+    source_language: Optional[str] = None
+    created_at: datetime
+    speaker_count: Optional[int] = None
 
 
 class EditorPlaybackState(BaseModel):
@@ -105,22 +111,23 @@ class EditorPlaybackState(BaseModel):
     playback_rate: float = 1.0
     video_source: str | None
 
+
 class SegmentTranslationResponse(BaseModel):
-  id: PyObjectId
-  project_id: PyObjectId
-  language_code: str
-  speaker_tag: str
-  start: float = Field(..., ge=0)
-  end: float = Field(..., ge=0)
-  source_text: str 
-  target_text: str | None = None
-  segment_audio_url: str | None = None 
+    id: PyObjectId
+    project_id: PyObjectId
+    language_code: str
+    speaker_tag: str
+    start: float = Field(..., ge=0)
+    end: float = Field(..., ge=0)
+    source_text: str
+    target_text: str | None = None
+    segment_audio_url: str | None = None
 
 
 class EditorStateResponse(BaseModel):
     project_id: str
     segments: list[SegmentTranslationResponse] = []
-    # voices: list[VoiceSampleOut] = []   
+    # voices: list[VoiceSampleOut] = []
     playback: EditorPlaybackState
 
 
@@ -131,10 +138,10 @@ class ProjectSegmentCreate(BaseModel):
     source_text: str
     is_verified: bool = False
     created_at: datetime | None = None
-    updated_at: datetime | None = None    
+    updated_at: datetime | None = None
 
 
-class SegmentTranslationCreate(BaseModel): 
+class SegmentTranslationCreate(BaseModel):
     language_code: str
     target_text: str | None = None
     segment_audio_url: str | None = None

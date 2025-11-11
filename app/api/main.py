@@ -12,6 +12,8 @@ from .me.router import me_router
 from .translate.routes import trans_router
 from .language.router import router as language_router
 from .user.routes import user_router
+from .project.target_routes import target_router
+from .assets.router import assets_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -29,3 +31,5 @@ api_router.include_router(me_router)
 api_router.include_router(trans_router)
 api_router.include_router(language_router)
 api_router.include_router(user_router)
+api_router.include_router(target_router)
+api_router.include_router(assets_router)

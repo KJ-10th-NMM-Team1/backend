@@ -4,12 +4,20 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Any, Optional
 from pymongo.errors import PyMongoError
 from app.api.deps import DbDep
-from .models import ProjectOut
+from .models import ProjectCreate, ProjectCreateResponse, ProjectOut
 from .service import ProjectService
 from ..segment.segment_service import SegmentService
 from app.api.auth.model import UserOut
 from app.api.auth.service import get_current_user_from_cookie
-from .models import ProjectCreate, ProjectCreateResponse, ProjectOut, EditorStateResponse, EditorPlaybackState, ProjectSegmentCreate, SegmentTranslationCreate
+from .models import (
+    ProjectCreate,
+    ProjectCreateResponse,
+    ProjectOut,
+    EditorStateResponse,
+    EditorPlaybackState,
+    ProjectSegmentCreate,
+    SegmentTranslationCreate,
+)
 
 # from app.api.auth.service import get_current_user_from_cookie
 
@@ -70,32 +78,19 @@ async def list_my_projects(
 
 
 @project_router.get("/", summary="프로젝트 전체 목록")
-async def list_projects(db: DbDep):
-    pipeline = [
-        {"$addFields": {"project_id_str": {"$toString": "$_id"}}},
-        {"$sort": {"created_at": -1}},
-        {
-            "$lookup": {
-                "from": "project_targets",
-                "let": {"pid": "$project_id_str"},
-                "pipeline": [
-                    {"$match": {"$expr": {"$eq": ["$project_id", "$$pid"]}}},
-                    # "_id"를 제거하지 말고 나머지 필드만 제한하고 싶다면 project에서 다른 것만 지정
-                    {"$project": {"project_id": 1, "language_code": 1, "status": 1, "progress": 1}}
-                ],
-                "as": "targets",
-            }
-        },
-        {"$addFields": {"targets": {"$ifNull": ["$targets", []]}}},
-    ]
-    # await db["projects"].delete_many({})
-    docs = await db["projects"].aggregate(pipeline).to_list(length=None)
-    # print({"items": [ProjectOut.model_validate(doc) for doc in docs]})
-    return {"items": [ProjectOut.model_validate(doc) for doc in docs]}
+async def list_projects(
+    project_service: ProjectService = Depends(ProjectService),
+) -> dict:
+    projects = await project_service.list_projects_with_targets()
+    return {"items": projects}
 
 
 @project_router.get("/{project_id}", summary="프로젝트 상세 조회")
-async def get_project(project_id: str, db: DbDep):
+async def get_project(
+    project_id: str,
+    db: DbDep,
+    # project_service: ProjectService = Depends(ProjectService),
+):
     try:
         project_oid = ObjectId(project_id)
     except InvalidId as exc:
@@ -110,35 +105,37 @@ async def get_project(project_id: str, db: DbDep):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found",
         )
-    
+
     project_id_str = str(project_oid)
-    targets = await db["project_targets"].find({"project_id": project_id_str}).to_list(None)
-    project["targets"] = targets    
-
-    segments = (
-        await db["segments"]
-        .find({"project_id": project_oid})
-        .sort("segment_index", 1)
-        .to_list(length=None)
-    )
-    segment_ids = [seg["_id"] for seg in segments]
-
-    issues = (
-        await db["issues"]
-        .find({"segment_id": {"$in": segment_ids}})
-        .to_list(length=None)
+    project["targets"] = (
+        await db["project_targets"].find({"project_id": project_id_str}).to_list(None)
     )
 
-    issues_by_segment: dict[ObjectId, list[dict[str, Any]]] = {}
-    for issue in issues:
-        issues_by_segment.setdefault(issue["segment_id"], []).append(issue)
+    # segments = (
+    #     await db["segments"]
+    #     .find({"project_id": project_oid})
+    #     .sort("segment_index", 1)
+    #     .to_list(length=None)
+    # )
+    # segment_ids = [seg["_id"] for seg in segments]
 
-    for segment in segments:
-        seg_id = segment["_id"]
-        segment["issues"] = issues_by_segment.get(seg_id, [])
-    project["segments"] = segments
-    serialized = _serialize(project)
-    return serialized
+    # issues = (
+    #     await db["issues"]
+    #     .find({"segment_id": {"$in": segment_ids}})
+    #     .to_list(length=None)
+    # )
+
+    # issues_by_segment: dict[ObjectId, list[dict[str, Any]]] = {}
+    # for issue in issues:
+    #     issues_by_segment.setdefault(issue["segment_id"], []).append(issue)
+
+    # for segment in segments:
+    #     seg_id = segment["_id"]
+    #     segment["issues"] = issues_by_segment.get(seg_id, [])
+    # project["segments"] = segments
+    # serialized = _serialize(project)
+    # return ProjectOut.model_validate(project)
+    return ProjectOut.model_validate(project)
 
 
 @project_router.delete("/{project_id}", response_model=int, summary="프로젝트 삭제")
@@ -166,7 +163,6 @@ async def delete_project(
     return result
 
 
-
 @project_router.get("/{project_id}/languages/{language_code}", summary="에디터 조회")
 async def get_project_editor(
     project_id: str,
@@ -175,7 +171,9 @@ async def get_project_editor(
     segment_service: SegmentService = Depends(SegmentService),
 ) -> EditorStateResponse:
     project = await project_service.get_project_by_id(project_id)  # 기본 정보
-    segments = await segment_service.get_project_segment_translations(project_id, language_code)
+    segments = await segment_service.get_project_segment_translations(
+        project_id, language_code
+    )
 
     # voices = []  # TODO: project_id + language_code 기반 조회
     # glossaries = []  # TODO: project_id 기반 조회
@@ -183,7 +181,7 @@ async def get_project_editor(
         duration=project.duration_seconds or 0,
         active_language=language_code,
         playback_rate=1.0,
-        video_source=project.video_source
+        video_source=project.video_source,
     )
 
     return EditorStateResponse(
@@ -192,14 +190,14 @@ async def get_project_editor(
         # voices=voices,
         # glossaries=glossaries,
         playback=playback,
-
     )
+
 
 @project_router.post(
     "/{project_id}/segments",
     status_code=status.HTTP_201_CREATED,
     summary="(시스템) 프로젝트 세그먼트 생성",
-    # include_in_schema=False,  
+    # include_in_schema=False,
 )
 async def create_project_segment(
     project_id: str,
