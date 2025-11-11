@@ -24,6 +24,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
+@router.get("/project/{project_id}")
+async def get_jobs_by_project(project_id: str, db: DbDep):
+    jobs = []
+    cursor = db["jobs"].find({"project_id": project_id})
+    async for job in cursor:
+        # MongoDB의 _id를 id로 변환
+        job["id"] = str(job.pop("_id"))
+        jobs.append(JobRead(**job))
+    return jobs
+
+
 @router.get("/{job_id}", response_model=JobRead)
 async def read_job(job_id: str, db: DbDep) -> JobRead:
     return await get_job(db, job_id)
@@ -150,7 +161,9 @@ async def check_and_create_segments(
                 for idx, seg_id in enumerate(result.inserted_ids):
                     segment_ids_map[segments_to_create[idx]["segment_index"]] = seg_id
 
-                logger.info(f"Created {len(segments_to_create)} segments for project {project_id}")
+                logger.info(
+                    f"Created {len(segments_to_create)} segments for project {project_id}"
+                )
                 segments_created = True
             except Exception as exc:
                 logger.error(f"Failed to create segments: {exc}")
@@ -159,7 +172,9 @@ async def check_and_create_segments(
         # 기존 세그먼트가 있으면 ID 매핑만 생성
         for seg in existing_segments:
             segment_ids_map[seg.get("segment_index", 0)] = seg["_id"]
-        logger.info(f"Using existing {len(existing_segments)} segments for project {project_id}")
+        logger.info(
+            f"Using existing {len(existing_segments)} segments for project {project_id}"
+        )
 
     # 번역 세그먼트 생성 (타겟 언어별로 생성)
     if segments and target_lang:
@@ -179,7 +194,9 @@ async def check_and_create_segments(
             # 해당 segment의 _id 찾기
             segment_obj_id = segment_ids_map.get(seg_index)
             if not segment_obj_id:
-                logger.warning(f"Cannot find segment_id for index {seg_index}, skipping translation")
+                logger.warning(
+                    f"Cannot find segment_id for index {seg_index}, skipping translation"
+                )
                 continue
 
             # 번역된 텍스트 추출
@@ -205,12 +222,14 @@ async def check_and_create_segments(
                     await db["segment_translations"].update_one(
                         {
                             "segment_id": trans["segment_id"],
-                            "language_code": trans["language_code"]
+                            "language_code": trans["language_code"],
                         },
                         {"$set": trans},
-                        upsert=True
+                        upsert=True,
                     )
-                logger.info(f"Created/Updated {len(translations_to_create)} translations for language {target_lang}")
+                logger.info(
+                    f"Created/Updated {len(translations_to_create)} translations for language {target_lang}"
+                )
             except Exception as exc:
                 logger.error(f"Failed to create segment translations: {exc}")
 
@@ -226,10 +245,14 @@ async def process_tts_completion(
     """TTS 완료 시 처리: asset 생성, 세그먼트 생성, 번역 저장"""
     target_lang = metadata.get("target_lang")
     if not target_lang:
-        logger.warning(f"No target_lang in tts_completed metadata for project {project_id}")
+        logger.warning(
+            f"No target_lang in tts_completed metadata for project {project_id}"
+        )
         return
 
-    logger.info(f"Processing TTS completion for project {project_id}, language {target_lang}")
+    logger.info(
+        f"Processing TTS completion for project {project_id}, language {target_lang}"
+    )
 
     # 1. Asset 생성 (완성된 더빙 비디오)
     if result_key:
@@ -243,7 +266,9 @@ async def process_tts_completion(
         logger.info(f"Processing {len(segments)} segments for {target_lang}")
         await check_and_create_segments(db, project_id, segments, target_lang)
     else:
-        logger.warning(f"No segments in metadata for project {project_id}, language {target_lang}")
+        logger.warning(
+            f"No segments in metadata for project {project_id}, language {target_lang}"
+        )
 
 
 async def tts_complete_processing(db, project_id, segments):
@@ -359,7 +384,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
     # stage별, project target 업데이트
     if stage == "downloaded":  # s3에서 불러오기 완료 (stt 시작)
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=0
+            status=ProjectTargetStatus.PROCESSING, progress=1
         )
     elif stage == "stt_completed":  # stt 완료
         target_update = ProjectTargetUpdate(
@@ -407,6 +432,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                     target_update.status or ProjectTargetStatus.PROCESSING,
                     target_update.progress or 0,
                 )
+
         except Exception as exc:
             logger.error(f"Failed to update project_target: {exc}")
 
