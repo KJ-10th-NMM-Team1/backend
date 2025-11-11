@@ -20,9 +20,9 @@ async def create_asset(
     payload: AssetCreate,
     asset_service: AssetService = Depends(AssetService),
 ) -> AssetOut:
-    return await asset_service.create_asset(
-        {**payload.model_dump(), "project_id": project_id}
-    )
+    payload_dict = payload.model_dump()
+    payload_dict.update({"project_id": project_id})
+    return await asset_service.create_asset(AssetCreate(**payload_dict))
 
 
 @assets_router.get(
