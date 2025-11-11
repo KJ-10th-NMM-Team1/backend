@@ -151,10 +151,14 @@ class ProjectService:
         if docs:
             await self.target_collection.insert_many(docs)
 
-    async def get_targets_by_project(self, project_id: str) -> List[ProjectTarget]:
-        docs = await self.target_collection.find({"project_id": project_id}).to_list(
-            length=None
-        )
+    async def get_targets_by_project(
+        self, project_id: str, language_code: str | None = None
+    ) -> List[ProjectTarget]:
+        query = {"project_id": project_id}
+        if language_code:
+            query["language_code"] = language_code
+        docs = await self.target_collection.find(query).to_list(length=None)
+
         result = []
         for doc in docs:
             doc["target_id"] = str(doc["_id"])
