@@ -9,7 +9,7 @@ from .service import ProjectService
 from ..segment.segment_service import SegmentService
 from app.api.auth.model import UserOut
 from app.api.auth.service import get_current_user_from_cookie
-from .models import ProjectCreate, ProjectCreateResponse, ProjectOut
+from .models import ProjectCreate, ProjectCreateResponse, ProjectOut, EditorStateResponse, EditorPlaybackState, ProjectSegmentCreate, SegmentTranslationCreate
 
 # from app.api.auth.service import get_current_user_from_cookie
 
@@ -164,3 +164,65 @@ async def delete_project(
 
     result = await segment_service.delete_segments_by_project(project_oid)
     return result
+
+
+
+@project_router.get("/{project_id}/languages/{language_code}", summary="에디터 조회")
+async def get_project_editor(
+    project_id: str,
+    language_code: str,
+    project_service: ProjectService = Depends(ProjectService),
+    segment_service: SegmentService = Depends(SegmentService),
+) -> EditorStateResponse:
+    project = await project_service.get_project_by_id(project_id)  # 기본 정보
+    segments = await segment_service.get_project_segment_translations(project_id, language_code)
+
+    # voices = []  # TODO: project_id + language_code 기반 조회
+    # glossaries = []  # TODO: project_id 기반 조회
+    playback = EditorPlaybackState(
+        duration=project.duration_seconds or 0,
+        active_language=language_code,
+        playback_rate=1.0,
+        video_source=project.video_source
+    )
+
+    return EditorStateResponse(
+        project_id=str(project_id),
+        segments=segments,
+        # voices=voices,
+        # glossaries=glossaries,
+        playback=playback,
+
+    )
+
+@project_router.post(
+    "/{project_id}/segments",
+    status_code=status.HTTP_201_CREATED,
+    summary="(시스템) 프로젝트 세그먼트 생성",
+    # include_in_schema=False,  
+)
+async def create_project_segment(
+    project_id: str,
+    payload: ProjectSegmentCreate,
+    segment_service: SegmentService = Depends(SegmentService),
+):
+    segment_id = await segment_service.create_project_segment(project_id, payload)
+    return {"segment_id": segment_id}
+
+
+@project_router.post(
+    "/{project_id}/segments/{segment_id}/translations",
+    status_code=status.HTTP_201_CREATED,
+    summary="(시스템) 세그먼트 번역 생성",
+    # include_in_schema=False,
+)
+async def create_segment_translation(
+    project_id: str,
+    segment_id: str,
+    payload: SegmentTranslationCreate,
+    segment_service: SegmentService = Depends(SegmentService),
+):
+    translation_id = await segment_service.create_segment_translation(
+        project_id, segment_id, payload
+    )
+    return {"translation_id": translation_id}

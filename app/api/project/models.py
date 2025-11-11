@@ -97,3 +97,46 @@ class ProjectOut(BaseModel):
     # owner_id: str
     issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드
     targets: list[ProjectTarget] = Field(default_factory=list)
+
+
+class EditorPlaybackState(BaseModel):
+    duration: float
+    active_language: str
+    playback_rate: float = 1.0
+    video_source: str | None
+
+class SegmentTranslationResponse(BaseModel):
+  id: PyObjectId
+  project_id: PyObjectId
+  language_code: str
+  speaker_tag: str
+  start: float = Field(..., ge=0)
+  end: float = Field(..., ge=0)
+  source_text: str 
+  target_text: str | None = None
+  segment_audio_url: str | None = None 
+
+
+class EditorStateResponse(BaseModel):
+    project_id: str
+    segments: list[SegmentTranslationResponse] = []
+    # voices: list[VoiceSampleOut] = []   
+    playback: EditorPlaybackState
+
+
+class ProjectSegmentCreate(BaseModel):
+    speaker_tag: str | None = None
+    start: float = Field(..., ge=0)
+    end: float = Field(..., ge=0)
+    source_text: str
+    is_verified: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None    
+
+
+class SegmentTranslationCreate(BaseModel): 
+    language_code: str
+    target_text: str | None = None
+    segment_audio_url: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
