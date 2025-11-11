@@ -25,6 +25,7 @@ from .models import PresignRequest, UploadFinalize
 from app.api.auth.service import get_current_user_from_cookie
 from app.api.auth.model import UserOut
 from .models import PresignRequest, RegisterRequest, UploadFinalize
+from app.api.project.models import ProjectThumbnail
 from app.config.redis import get_redis
 from app.workers.jobs.video_ingest import run_ingest
 from app.utils.thumbnail import extract_and_upload_thumbnail, ThumbnailError
@@ -163,7 +164,7 @@ async def finish_upload(
     if not bucket:
         raise HTTPException(status_code=500, detail="AWS_S3_BUCKET env not set")
 
-    thumbnail_payload: dict[str, str | None] | None = None
+    thumbnail_payload: ProjectThumbnail | None = None
     suffix = Path(payload.object_key).suffix or ".mp4"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
         tmp_path = Path(tmp_file.name)
@@ -177,7 +178,9 @@ async def finish_upload(
                 thumbnail_key = extract_and_upload_thumbnail(
                     tmp_path, payload.project_id
                 )
-                thumbnail_payload = {"kind": "s3", "key": thumbnail_key, "url": None}
+                thumbnail_payload = ProjectThumbnail(
+                    kind="s3", key=thumbnail_key, url=None
+                )
             except ThumbnailError:
                 thumbnail_payload = None
     finally:
@@ -188,7 +191,7 @@ async def finish_upload(
 
     update_payload = ProjectUpdate(
         project_id=payload.project_id,
-        status="upload_done",
+        status="uploaded",
         video_source=payload.object_key,
         thumbnail=thumbnail_payload,
     )

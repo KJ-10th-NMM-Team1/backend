@@ -73,18 +73,8 @@ async def list_my_projects(
 async def list_projects(db: DbDep):
     # await db["projects"].delete_many({})
     docs = await db["projects"].find().sort("created_at", -1).to_list(length=None)
+    # print({"items": [ProjectOut.model_validate(doc) for doc in docs]})
     return {"items": [ProjectOut.model_validate(doc) for doc in docs]}
-    # return {ProjectOut.model_validate(doc) for doc in docs]
-
-
-# import time, logging
-
-# logger = logging.getLogger(__name__)
-
-
-# @project_router.get("/health", summary="프로젝트 헬스체크")
-# async def health_check():
-#     return {"status": "ok"}
 
 
 @project_router.get("/{project_id}", summary="프로젝트 상세 조회")

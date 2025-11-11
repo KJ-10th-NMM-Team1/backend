@@ -37,3 +37,12 @@ class LanguageService:
         result = await self.collection.delete_one({"language_code": code})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="language not found")
+
+    async def ensure_defaults(self, defaults: List[LanguageCreate]) -> List[Language]:
+        for language in defaults:
+            await self.collection.update_one(
+                {"language_code": language.language_code},
+                {"$set": language.model_dump()},
+                upsert=True,
+            )
+        return await self.list_languages()
