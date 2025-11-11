@@ -239,9 +239,9 @@ def media_redirect(key: str):
         "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600
     )
 
-    resp = RedirectResponse(url, status_code=302)
-    resp.headers["Cache-Control"] = "private, max-age=300"
-    return resp
+    # resp = RedirectResponse(url, status_code=302)
+    # resp.headers["Cache-Control"] = "private, max-age=300"
+    return {"url": url}
 
 
 @upload_router.get("/{project_id}/events")
