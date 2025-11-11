@@ -32,3 +32,13 @@ async def get_targets_by_project_and_language(
         language_code=language_code,
     )
     return targets[0]
+
+
+@target_router.put("/{target_id}", summary="타겟 단일 수정")
+async def update_targets_by_project(
+    target_id: str,
+    target: ProjectTarget,
+    project_service: ProjectService = Depends(ProjectService),
+) -> ProjectTarget:
+    updated_targets = await project_service.update_targets(target_id, target)
+    return updated_targets

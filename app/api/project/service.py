@@ -164,3 +164,22 @@ class ProjectService:
             doc["target_id"] = str(doc["_id"])
             result.append(ProjectTarget.model_validate(doc))
         return result
+
+    async def update_targets(
+        self, target_id: str, payload: ProjectTarget
+    ) -> List[ProjectTarget]:
+        doc = await self.target_collection.find_one({"_id": ObjectId(target_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Target not found")
+
+        update_data = payload.model_dump(exclude_none=True)
+        update_data["updated_at"] = datetime.now()
+        await self.target_collection.update_one(
+            {"_id": ObjectId(target_id)},
+            {"$set": update_data},
+            # {"$set": {**update_data, "project_id": doc["project_id"]}},
+        )
+        doc = await self.target_collection.find_one({"_id": ObjectId(target_id)})
+        doc["target_id"] = str(doc["_id"])
+
+        return doc
