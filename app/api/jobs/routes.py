@@ -19,6 +19,7 @@ from ..project.service import ProjectService
 from ..assets.service import AssetService
 from ..assets.models import AssetCreate, AssetType
 from app.utils.project_utils import extract_language_code
+from app.utils.s3 import download_metadata_from_s3, parse_segments_from_metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -106,8 +107,18 @@ async def check_and_create_segments(
     project_id: str,
     segments: list,
     target_lang: str,
+    translated_texts: list[str] | None = None,
 ) -> bool:
-    """세그먼트 생성 - 첫 번째 타겟 언어일 때만 project_segments 생성, 번역은 항상 생성"""
+    """
+    세그먼트 생성 - 첫 번째 타겟 언어일 때만 project_segments 생성, 번역은 항상 생성
+
+    Args:
+        db: Database connection
+        project_id: 프로젝트 ID
+        segments: 세그먼트 리스트 (기존 포맷 또는 새 포맷)
+        target_lang: 타겟 언어 코드
+        translated_texts: 번역된 텍스트 리스트 (새 포맷용, segments와 같은 순서)
+    """
     segment_service = SegmentService(db)
 
     # 이미 세그먼트가 있는지 확인
@@ -125,32 +136,46 @@ async def check_and_create_segments(
         segments_to_create = []
 
         for i, seg in enumerate(segments):
-            # 워커에서 오는 데이터 필드 매핑
-            # seg에 포함된 필드들:
-            # - segment_id, seg_idx, speaker, start, end, target_duration
-            # - audio_file, voice_sample, prompt_text, tts_backend
+            # 새 포맷 vs 기존 포맷 구분
+            # 새 포맷: {"segment_index": 0, "speaker_tag": "SPEAKER_00", "start": 0.217, "end": 13.426, "source_text": "..."}
+            # 기존 포맷: {"segment_id": ..., "seg_idx": ..., "speaker": ..., "start": ..., "end": ..., "prompt_text": ...}
 
-            segment_data = {
-                "project_id": project_id,
-                "speaker_tag": seg.get("speaker", ""),
-                "start": float(seg.get("start", 0)),
-                "end": float(seg.get("end", 0)),
-                "source_text": seg.get("prompt_text", ""),  # prompt_text가 원본 텍스트
-                "is_verified": False,
-                "created_at": now,
-                "updated_at": now,
-            }
-
-            # segment_index 추가 (순서 보장)
-            if "seg_idx" in seg:
-                segment_data["segment_index"] = int(seg["seg_idx"])
-            elif "segment_id" in seg:
-                try:
-                    segment_data["segment_index"] = int(seg["segment_id"])
-                except (ValueError, TypeError):
-                    segment_data["segment_index"] = i
+            if "speaker_tag" in seg:
+                # 새 포맷 (parse_segments_from_metadata에서 생성된 포맷)
+                segment_data = {
+                    "project_id": project_id,
+                    "speaker_tag": seg.get("speaker_tag", ""),
+                    "start": float(seg.get("start", 0)),
+                    "end": float(seg.get("end", 0)),
+                    "source_text": seg.get("source_text", ""),
+                    "segment_index": seg.get("segment_index", i),
+                    "is_verified": False,
+                    "created_at": now,
+                    "updated_at": now,
+                }
             else:
-                segment_data["segment_index"] = i
+                # 기존 포맷 (워커에서 오는 데이터)
+                segment_data = {
+                    "project_id": project_id,
+                    "speaker_tag": seg.get("speaker", ""),
+                    "start": float(seg.get("start", 0)),
+                    "end": float(seg.get("end", 0)),
+                    "source_text": seg.get("prompt_text", ""),
+                    "is_verified": False,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+
+                # segment_index 추가 (순서 보장)
+                if "seg_idx" in seg:
+                    segment_data["segment_index"] = int(seg["seg_idx"])
+                elif "segment_id" in seg:
+                    try:
+                        segment_data["segment_index"] = int(seg["segment_id"])
+                    except (ValueError, TypeError):
+                        segment_data["segment_index"] = i
+                else:
+                    segment_data["segment_index"] = i
 
             segments_to_create.append(segment_data)
 
@@ -182,14 +207,19 @@ async def check_and_create_segments(
 
         for i, seg in enumerate(segments):
             # segment_index 결정
-            seg_index = i
-            if "seg_idx" in seg:
+            if "segment_index" in seg:
+                # 새 포맷
+                seg_index = seg["segment_index"]
+            elif "seg_idx" in seg:
+                # 기존 포맷
                 seg_index = int(seg["seg_idx"])
             elif "segment_id" in seg:
                 try:
                     seg_index = int(seg["segment_id"])
                 except (ValueError, TypeError):
                     seg_index = i
+            else:
+                seg_index = i
 
             # 해당 segment의 _id 찾기
             segment_obj_id = segment_ids_map.get(seg_index)
@@ -200,10 +230,16 @@ async def check_and_create_segments(
                 continue
 
             # 번역된 텍스트 추출
-            # 워커에서 prompt_text가 번역된 텍스트임 (주석 참고)
-            # prompt_text는 TTS에 사용된 텍스트로, 번역된 텍스트가 들어있음
-            translated_text = seg.get("prompt_text", "")
-            audio_url = seg.get("audio_file")  # TTS 오디오 파일 경로
+            # 새 포맷: translated_texts 리스트에서 가져옴
+            # 기존 포맷: prompt_text가 번역된 텍스트임
+            if translated_texts and i < len(translated_texts):
+                # 새 포맷 사용
+                translated_text = translated_texts[i]
+                audio_url = None  # 새 포맷에서는 audio_url이 별도로 전달됨
+            else:
+                # 기존 포맷 사용
+                translated_text = seg.get("prompt_text", "")
+                audio_url = seg.get("audio_file")  # TTS 오디오 파일 경로
 
             translation_data = {
                 "segment_id": str(segment_obj_id),
@@ -236,22 +272,29 @@ async def check_and_create_segments(
     return segments_created or len(existing_segments) > 0
 
 
-async def process_tts_completion(
+async def process_md_completion(
     db: DbDep,
     project_id: str,
     metadata: dict,
     result_key: str,
+    defaultTaget: str = None,
 ) -> None:
-    """TTS 완료 시 처리: asset 생성, 세그먼트 생성, 번역 저장"""
-    target_lang = metadata.get("target_lang")
+    """
+    Done 시 처리: asset 생성, 세그먼트 생성, 번역 저장
+
+    metadata 포맷:
+    1. 기존 포맷: {"target_lang": "en", "segments": [{...}]}
+    2. 새 포맷: {"target_lang": "en", "metadata_key": "s3://path/to/metadata.json"}
+    """
+    target_lang = metadata.get("target_lang", defaultTaget)
     if not target_lang:
         logger.warning(
-            f"No target_lang in tts_completed metadata for project {project_id}"
+            f"No target_lang in metadata for project {project_id}"
         )
         return
 
     logger.info(
-        f"Processing TTS completion for project {project_id}, language {target_lang}"
+        f"Processing completion for project {project_id}, language {target_lang}"
     )
 
     # 1. Asset 생성 (완성된 더빙 비디오)
@@ -259,16 +302,50 @@ async def process_tts_completion(
         await create_asset_from_result(db, project_id, target_lang, result_key)
 
     # 2. 세그먼트 및 번역 생성
-    # - 첫 번째 타겟 언어일 때: project_segments + segment_translations 생성
-    # - 추가 타겟 언어일 때: segment_translations만 생성 또는 업데이트
-    segments = metadata.get("segments", [])
-    if segments:
-        logger.info(f"Processing {len(segments)} segments for {target_lang}")
-        await check_and_create_segments(db, project_id, segments, target_lang)
+    # metadata_key가 있으면 S3에서 metadata를 다운로드
+    metadata_key = metadata.get("metadata_key")
+
+    if metadata_key:
+        # 새 포맷: S3에서 metadata 다운로드
+        try:
+            logger.info(f"Downloading metadata from S3: {metadata_key}")
+            s3_metadata = await download_metadata_from_s3(metadata_key)
+
+            # metadata 파싱하여 segments 추출
+            segments = parse_segments_from_metadata(s3_metadata)
+
+            # 번역된 텍스트 추출 (metadata에 translations가 있을 수 있음)
+            # 워커가 번역된 텍스트를 별도로 전달하는 경우
+            translated_texts = metadata.get("translations") or metadata.get("translated_texts")
+
+            if segments:
+                logger.info(f"Processing {len(segments)} segments from S3 metadata for {target_lang}")
+                await check_and_create_segments(
+                    db,
+                    project_id,
+                    segments,
+                    target_lang,
+                    translated_texts=translated_texts
+                )
+            else:
+                logger.warning(f"No segments found in S3 metadata for project {project_id}")
+        except Exception as exc:
+            logger.error(f"Failed to process S3 metadata: {exc}")
+            # S3 메타데이터 처리 실패 시 기존 방식으로 fallback
+            segments = metadata.get("segments", [])
+            if segments:
+                logger.info(f"Falling back to inline segments for {target_lang}")
+                await check_and_create_segments(db, project_id, segments, target_lang)
     else:
-        logger.warning(
-            f"No segments in metadata for project {project_id}, language {target_lang}"
-        )
+        # 기존 포맷: metadata에 직접 segments가 포함됨
+        segments = metadata.get("segments", [])
+        if segments:
+            logger.info(f"Processing {len(segments)} inline segments for {target_lang}")
+            await check_and_create_segments(db, project_id, segments, target_lang)
+        else:
+            logger.warning(
+                f"No segments in metadata for project {project_id}, language {target_lang}"
+            )
 
 
 async def tts_complete_processing(db, project_id, segments):
@@ -382,32 +459,48 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
     target_update = None
 
     # stage별, project target 업데이트
-    if stage == "downloaded":  # s3에서 불러오기 완료 (stt 시작)
+    if stage == "starting":  # s3에서 불러오기 완료 (stt 시작)
         target_update = ProjectTargetUpdate(
             status=ProjectTargetStatus.PROCESSING, progress=1
         )
-    elif stage == "stt_completed":  # stt 완료
+    elif stage == "asr_started":  # stt 시작
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.PROCESSING, progress=10  # STT 시작 시 10%
+        )
+    elif stage == "asr_completed":  # stt 완료
         target_update = ProjectTargetUpdate(
             status=ProjectTargetStatus.PROCESSING, progress=20  # STT 완료 시 20%
         )
-    elif stage == "mt_prepare":
+    elif stage == "translation_started":
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=25  # MT 시작 시 25%
+            status=ProjectTargetStatus.PROCESSING, progress=21  # MT 시작 시 25%
         )
-    elif stage == "mt_completed":  # mt 완료
+    elif stage == "translation_completed":  # mt 완료
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=50  # MT 완료 시 50%
+            status=ProjectTargetStatus.PROCESSING, progress=35  # MT 완료 시 50%
         )
-    elif stage == "tts_prepare":  # TTS 시작
+    elif stage == "tts_started":  # TTS 시작
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=55  # TTS 시작 시 55%
+            status=ProjectTargetStatus.PROCESSING, progress=36  # TTS 시작 시 55%
         )
     elif stage == "tts_completed":  # TTS 완료 - 최종 완료 처리
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.COMPLETED, progress=70  # TTS 완료
+        )
+    elif stage == "mux_started":  # 비디오 처리 시작
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.PROCESSING,
+            progress=71,  # 비디오 처리 시작 시 70%
+        )
+    elif stage == "done":  # 비디오 처리 완료
         # 새로운 처리 함수 호출: asset 생성 및 세그먼트 생성
-        await process_tts_completion(db, project_id, metadata, result.result_key)
+        await process_md_completion(
+            db, project_id, metadata, result.result_key, defaultTaget=language_code
+        )
 
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.COMPLETED, progress=100  # TTS 완료
+            status=ProjectTargetStatus.COMPLETED,
+            progress=100,  # 비디오 처리 완료 시 100%
         )
     elif stage == "failed":  # 실패
         target_update = ProjectTargetUpdate(
