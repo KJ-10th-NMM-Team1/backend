@@ -3,13 +3,14 @@ from datetime import datetime
 from typing import Optional, List
 from bson import ObjectId
 from ..deps import DbDep
-from ..project.models import (
+from .models import (
     ProjectCreate,
     ProjectUpdate,
     ProjectPublic,
     ProjectBase,
     ProjectOut,
     ProjectTargetStatus,
+    ProjectTarget,
 )
 from ..pipeline.service import _create_default_pipeline
 
@@ -149,3 +150,13 @@ class ProjectService:
             )
         if docs:
             await self.target_collection.insert_many(docs)
+
+    async def get_targets_by_project(self, project_id: str) -> List[ProjectTarget]:
+        docs = await self.target_collection.find({"project_id": project_id}).to_list(
+            length=None
+        )
+        result = []
+        for doc in docs:
+            doc["target_id"] = str(doc["_id"])
+            result.append(ProjectTarget.model_validate(doc))
+        return result
