@@ -10,7 +10,7 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace:cached
-      - ~/.aws:/root/.aws:ro # host 프로파일을 컨테이너에 전달
+      - 'C:\Users\malss\.aws:/root/.aws:ro'
       - ${GOOGLE_APPLICATION_CREDENTIALS_HOST}:${GOOGLE_APPLICATION_CREDENTIALS}:ro # GCP 서비스 키 전달
       # - C:/Users/jjy33/Desktop/jungle/04-namanmu/key:/app/key
     # command: sleep infinity
@@ -42,7 +42,7 @@ services:
     #   -- "python -m app.workers.video_worker"
     volumes:
       - .:/workspace:cached
-      - ~/.aws:/root/.aws:ro
+      - 'C:\Users\malss\.aws:/root/.aws:ro'
       - ./worker-scratch:/tmp/dupilot-ingest
     environment:
       PYTHONPATH: /workspace

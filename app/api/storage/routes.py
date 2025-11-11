@@ -2,6 +2,7 @@
 import os
 import asyncio
 import tempfile
+import logging
 from uuid import uuid4
 from hashlib import sha256
 from sse_starlette.sse import EventSourceResponse
@@ -33,6 +34,7 @@ from pathlib import Path
 from moviepy.editor import VideoFileClip
 
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
+logger = logging.getLogger("api_logger")
 
 
 def _make_idem_key(req: RegisterRequest, header_key: str | None) -> str:
@@ -133,6 +135,7 @@ async def prepare_file_upload(
     object_key = (
         f"projects/{payload.project_id}/inputs/videos/{uuid4()}_{payload.filename}"
     )
+    logger.info(f"Generated object_key for prepare-upload: {object_key}")
     try:
         presigned = s3.generate_presigned_post(
             Bucket=bucket,
@@ -161,6 +164,7 @@ async def finish_upload(
     # _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
     project_service: ProjectService = Depends(ProjectService),
 ):
+    logger.info(f"Received object_key for finish-upload: {payload.object_key}")
     bucket = os.getenv("AWS_S3_BUCKET")
     if not bucket:
         raise HTTPException(status_code=500, detail="AWS_S3_BUCKET env not set")

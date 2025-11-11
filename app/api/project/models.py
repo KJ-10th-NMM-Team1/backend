@@ -95,7 +95,7 @@ class ProjectOut(BaseModel):
     id: PyObjectId = Field(validation_alias="_id")
     title: str
     status: str
-    video_source: str | None
+    video_source: str | None = None
     thumbnail: ProjectThumbnail | None = None
     duration_seconds: Optional[int] | None = None
     issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드

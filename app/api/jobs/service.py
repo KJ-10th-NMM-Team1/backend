@@ -322,6 +322,11 @@ async def update_job_status(
     project_updates: dict[str, Any] = {}
     metadata = payload.metadata if isinstance(payload.metadata, dict) else None
     if metadata:
+        # metadata에 stage가 있으면 project의 status를 업데이트
+        stage = metadata.get("stage")
+        if stage:
+            project_updates["status"] = stage
+
         # segments_meta = metadata.get("segments")
         # if isinstance(segments_meta, list):
         #     normalized_segments = [
@@ -334,31 +339,8 @@ async def update_job_status(
         assets_prefix = metadata.get("segment_assets_prefix")
         if assets_prefix:
             project_updates["segment_assets_prefix"] = assets_prefix
-
-        target_lang = metadata.get("target_lang")
-        if target_lang:
-            project_updates["target_lang"] = target_lang
-
-        source_lang = metadata.get("source_lang")
-        if source_lang:
-            project_updates["source_lang"] = source_lang
-
-        metadata_key = metadata.get("metadata_key")
-        if metadata_key:
-            project_updates["segment_metadata_key"] = metadata_key
-
-        result_key_meta = metadata.get("result_key")
-        if result_key_meta:
-            project_updates["segment_result_key"] = result_key_meta
-
-        # if metadata.get("stage") == "segment_tts_completed":
-        #     segment_patch = metadata.get("segment")
-        #     if isinstance(segment_patch, dict):
-        #         field_updates = _build_segment_field_updates(segment_patch)
-        #         if field_updates:
-        #             project_updates.update(field_updates)
-        #             project_updates["segments_updated_at"] = now
-
+    
+    # payload.status가 있으면 project의 최종 status를 덮어씀 (done, failed 등)
     if payload.status:
         project_updates.setdefault("status", payload.status)
 
@@ -447,10 +429,16 @@ async def start_job(project: ProjectPublic, db: DbDep):
     callback_base = _resolve_callback_base()
     job_oid = ObjectId()
     callback_url = f"{callback_base.rstrip('/')}/api/jobs/{job_oid}/status"
+
+    task_payload = {}
+    if project.target_languages:
+        task_payload["target_lang"] = project.target_languages[0]
+
     job_payload = JobCreate(
         project_id=project.project_id,
         input_key=project.video_source,
         callback_url=callback_url,
+        task_payload=task_payload if task_payload else None,
     )
     job = await create_job(db, job_payload, job_oid=job_oid)
 
