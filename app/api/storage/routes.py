@@ -185,7 +185,7 @@ async def finish_upload(
                 )
                 clip = VideoFileClip(str(tmp_path))
                 duration_seconds = int(round(clip.duration or 0))
-                clip.close()                
+                clip.close()
             except ThumbnailError:
                 thumbnail_payload = None
     finally:
@@ -199,7 +199,7 @@ async def finish_upload(
         status="uploaded",
         video_source=payload.object_key,
         thumbnail=thumbnail_payload,
-        duration_seconds=duration_seconds
+        duration_seconds=duration_seconds,
     )
     try:
         get_pipeline_status(db, update_payload.project_id)

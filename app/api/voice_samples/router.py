@@ -8,13 +8,16 @@ from fastapi import (
     File,
     Form,
 )
-from typing import Optional
+from fastapi.responses import StreamingResponse
+from typing import Optional, Any
 import os
 import asyncio
 import tempfile
+import json
 from pathlib import Path
 from uuid import uuid4
 from bson import ObjectId
+from datetime import datetime
 
 from ..deps import DbDep
 from ..auth.service import get_current_user_from_cookie
@@ -264,14 +267,17 @@ async def finish_voice_sample_upload(
             },
         )
 
+        # Job 생성
         job = await create_job(db, job_payload, job_oid=job_oid)
+
+        # Job 큐잉
         await enqueue_job(job)
 
     except Exception as exc:
         logger.error(
             f"Failed to start TTS job for voice sample {voice_sample.sample_id}: {exc}"
         )
-
+        logger.exception("Exception details:")
     return voice_sample
 
 
@@ -343,3 +349,66 @@ async def delete_voice_sample(
     service = VoiceSampleService(db)
     await service.delete_voice_sample(sample_id, current_user)
     return None
+
+
+def _serialize_datetime(obj: Any) -> Any:
+    """datetime 객체를 JSON 직렬화 가능한 문자열로 변환"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {key: _serialize_datetime(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [_serialize_datetime(item) for item in obj]
+    return obj
+
+
+@voice_samples_router.get("/{sample_id}/stream", summary="음성 샘플 상태 실시간 스트림")
+async def stream_voice_sample_status(sample_id: str, db: DbDep):
+    """SSE를 통해 음성 샘플의 audio_sample_url 업데이트를 실시간으로 스트리밍합니다."""
+
+    async def event_stream():
+        service = VoiceSampleService(db)
+        try:
+            while True:
+                # voice_sample 조회
+                try:
+                    sample = await service.get_voice_sample(sample_id, None)
+                    data = {
+                        "sample_id": str(sample.sample_id),
+                        "audio_sample_url": sample.audio_sample_url,
+                        "has_audio_sample": sample.audio_sample_url is not None,
+                    }
+                    # datetime 객체를 문자열로 변환
+                    data = _serialize_datetime(data)
+
+                    yield f"data: {json.dumps(data)}\n\n"
+
+                    # audio_sample_url이 채워지면 종료
+                    if sample.audio_sample_url:
+                        break
+
+                except HTTPException as e:
+                    if e.status_code == 404:
+                        error_data = {"error": "Voice sample not found"}
+                        yield f"data: {json.dumps(error_data)}\n\n"
+                        break
+                    raise
+
+                # 2초마다 폴링
+                await asyncio.sleep(2)
+
+        except Exception as e:
+            # 에러 발생 시 클라이언트에 에러 메시지 전송
+            error_data = {"error": str(e), "timestamp": datetime.now().isoformat()}
+            yield f"data: {json.dumps(error_data)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control",
+        },
+    )
