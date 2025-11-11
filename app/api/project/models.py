@@ -45,6 +45,7 @@ class ProjectPublic(ProjectBase):
     thumbnail: ProjectThumbnail | None = None
     glosary_id: Optional[str] = None
     duration_seconds: Optional[int] = None
+    audio_source: str | None = None
 
 
 class ProjectCreateResponse(BaseModel):
@@ -55,6 +56,7 @@ class ProjectUpdate(BaseModel):
     project_id: str
     status: str | None = None
     video_source: str | None = None
+    audio_source: str | None = None
     thumbnail: ProjectThumbnail | None = None
     segment_assets_prefix: Optional[str] = None
     segments: Optional[List[Dict[str, Any]]] = None
@@ -110,6 +112,7 @@ class EditorPlaybackState(BaseModel):
     active_language: str
     playback_rate: float = 1.0
     video_source: str | None
+    audio_source: str | None
 
 
 class SegmentTranslationResponse(BaseModel):
