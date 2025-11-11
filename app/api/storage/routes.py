@@ -18,6 +18,7 @@ from botocore.exceptions import ClientError
 from app.api.jobs.service import start_job, start_jobs_for_targets
 from app.api.project.service import ProjectService
 from app.config.s3 import s3
+from app.utils.job_utils import process_project_jobs
 from ..deps import DbDep
 from bson.errors import InvalidId
 from ..project.models import ProjectUpdate
@@ -221,20 +222,16 @@ async def finish_upload(
             detail="Failed to update project",
         ) from exc
 
-    # 프로젝트의 타겟 언어들 가져오기
-    targets = await project_service.get_targets_by_project(payload.project_id)
-    if targets:
-        target_languages = [target.get("language_code") for target in targets if target.get("language_code")]
-        if target_languages:
-            # 타겟 언어별로 job 생성
-            jobs = await start_jobs_for_targets(result, target_languages, db)
-            logger.info(f"Created {len(jobs)} jobs for project {payload.project_id}")
-        else:
-            # 타겟 언어가 없으면 기존 방식 사용
-            await start_job(result, db)
-    else:
-        # 타겟이 없으면 기존 방식 사용
-        await start_job(result, db)
+    # 공통 job 처리 로직 사용
+    await process_project_jobs(
+        project=result,
+        project_id=payload.project_id,
+        project_service=project_service,
+        start_job=start_job,
+        start_jobs_for_targets=start_jobs_for_targets,
+        db=db,
+        context="finish_upload"
+    )
 
     return result
 

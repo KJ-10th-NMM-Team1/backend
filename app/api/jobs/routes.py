@@ -18,6 +18,7 @@ from ..project.models import ProjectTargetUpdate, ProjectTargetStatus
 from ..project.service import ProjectService
 from ..assets.service import AssetService
 from ..assets.models import AssetCreate, AssetType
+from app.utils.project_utils import extract_language_code
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -263,11 +264,14 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
         try:
             project_service = ProjectService(db)
             targets = await project_service.get_targets_by_project(project_id)
-            if targets:
-                language_code = targets[0].get("language_code")
-                logger.info(
-                    f"Using first target language {language_code} for job {job_id}"
-                )
+            if targets and len(targets) > 0:
+                # 유틸 함수로 첫 번째 타겟의 언어 코드 추출
+                language_code = extract_language_code(targets[0])
+
+                if language_code:
+                    logger.info(
+                        f"Using first target language {language_code} for job {job_id}"
+                    )
         except Exception as exc:
             logger.error(f"Failed to get project targets: {exc}")
 
