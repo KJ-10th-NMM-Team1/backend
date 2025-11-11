@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import HTTPException
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -6,14 +6,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..deps import DbDep
 from .model import ResponseSegment, RequestSegment
-
+from ..project.models import SegmentTranslationResponse, ProjectSegmentCreate, SegmentTranslationCreate
 
 class SegmentService:
     def __init__(self, db: DbDep):
         self.db = db
         self.collection_name = "projects"
         self.collection = db.get_collection(self.collection_name)
-        self.segment_collection = db.get_collection("segments")
+        self.segment_collection = db.get_collection("project_segments")
         self.projection = {
             "segments": 1,
             "editor_id": 1,
@@ -22,6 +22,7 @@ class SegmentService:
             "source_lang": 1,
             "video_source": 1,
         }
+        self.translation_collection = db.get_collection("segment_translations")        
 
     async def test_save_segment(self, request: RequestSegment, db_name: str):
         project_oid = ObjectId(request.project_id)
@@ -181,3 +182,80 @@ class SegmentService:
                 normalized[key] = value
 
         return normalized
+
+
+    async def get_project_segment_translations(
+        self,
+        project_id: str,
+        language_code: str,
+    ) -> list[SegmentTranslationResponse]:
+        project_oid = ObjectId(project_id)
+
+        segments = await self.segment_collection.find(
+            {"project_id": project_oid}
+        ).to_list(None)
+
+        if not segments:
+            return []
+
+        segment_ids = [seg["_id"] for seg in segments]
+
+        translations = await self.translation_collection.find(
+            {"segment_id": {"$in": segment_ids}, "language_code": language_code}
+        ).to_list(None)
+
+        translation_map = {doc["segment_id"]: doc for doc in translations}
+
+        result = []
+        for seg in segments:
+            merged = {
+                "id": seg["_id"],
+                **seg,
+                **translation_map.get(seg["_id"], {}),
+                "language_code": language_code,
+            }
+            result.append(SegmentTranslationResponse(**merged))
+
+        return result
+
+    async def create_project_segment(
+        self,
+        project_id: str,
+        payload: ProjectSegmentCreate,
+    ) -> str:
+        project_oid = ObjectId(project_id)
+        now = datetime.now(timezone.utc)
+
+        doc = payload.model_dump(exclude_none=True)
+        doc.setdefault("created_at", now)
+        doc.setdefault("updated_at", now)
+        doc["project_id"] = project_oid
+
+        result = await self.segment_collection.insert_one(doc)
+        return str(result.inserted_id)
+
+    async def create_segment_translation(
+        self,
+        project_id: str,
+        segment_id: str,
+        payload: SegmentTranslationCreate,
+    ) -> str:
+        project_oid = ObjectId(project_id)
+        segment_oid = ObjectId(segment_id)
+
+        segment = await self.segment_collection.find_one(
+            {"_id": segment_oid, "project_id": project_oid},
+            {"_id": 1},
+        )
+        if not segment:
+            raise HTTPException(status_code=404, detail="segment not found")
+
+        now = datetime.now(timezone.utc),
+        doc = payload.model_dump(exclude_none=True)
+        doc.setdefault("created_at", now)
+        doc.setdefault("updated_at", now)
+        doc["segment_id"] = segment_oid
+        doc["project_id"] = project_oid
+
+        result = await self.translation_collection.insert_one(doc)
+        return str(result.inserted_id)

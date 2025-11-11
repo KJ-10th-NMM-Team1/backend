@@ -7,9 +7,13 @@ from .project.router import project_router
 from .segment.router import segment_router, editor_segment_router
 from .pipeline.router import pipeline_router
 from .auth.router import auth_router
-from .voice.router import voice_router
+from .voice_samples.router import voice_samples_router
+from .me.router import me_router
 from .translate.routes import trans_router
 from .language.router import router as language_router
+from .user.routes import user_router
+from .project.target_routes import target_router
+from .assets.router import assets_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -22,6 +26,10 @@ api_router.include_router(editor_segment_router)
 api_router.include_router(job_router)
 api_router.include_router(pipeline_router)
 api_router.include_router(auth_router)
-api_router.include_router(voice_router)
+api_router.include_router(voice_samples_router)
+api_router.include_router(me_router)
 api_router.include_router(trans_router)
 api_router.include_router(language_router)
+api_router.include_router(user_router)
+api_router.include_router(target_router)
+api_router.include_router(assets_router)

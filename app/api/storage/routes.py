@@ -25,10 +25,12 @@ from .models import PresignRequest, UploadFinalize
 from app.api.auth.service import get_current_user_from_cookie
 from app.api.auth.model import UserOut
 from .models import PresignRequest, RegisterRequest, UploadFinalize
+from app.api.project.models import ProjectThumbnail
 from app.config.redis import get_redis
 from app.workers.jobs.video_ingest import run_ingest
 from app.utils.thumbnail import extract_and_upload_thumbnail, ThumbnailError
 from pathlib import Path
+from moviepy.editor import VideoFileClip
 
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
 
@@ -118,6 +120,7 @@ async def register_source(payload: RegisterRequest, request: Request, db: DbDep)
 async def prepare_file_upload(
     payload: PresignRequest,
     # _current_user: UserOut = Depends(get_current_user_from_cookie),  # 인증 추가
+    project_service: ProjectService = Depends(ProjectService),
 ):
     bucket = os.getenv("AWS_S3_BUCKET")
     if not bucket:
@@ -162,8 +165,9 @@ async def finish_upload(
     if not bucket:
         raise HTTPException(status_code=500, detail="AWS_S3_BUCKET env not set")
 
-    thumbnail_payload: dict[str, str | None] | None = None
+    thumbnail_payload: ProjectThumbnail | None = None
     suffix = Path(payload.object_key).suffix or ".mp4"
+    duration_seconds = None
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
         tmp_path = Path(tmp_file.name)
     try:
@@ -176,7 +180,12 @@ async def finish_upload(
                 thumbnail_key = extract_and_upload_thumbnail(
                     tmp_path, payload.project_id
                 )
-                thumbnail_payload = {"kind": "s3", "key": thumbnail_key, "url": None}
+                thumbnail_payload = ProjectThumbnail(
+                    kind="s3", key=thumbnail_key, url=None
+                )
+                clip = VideoFileClip(str(tmp_path))
+                duration_seconds = int(round(clip.duration or 0))
+                clip.close()                
             except ThumbnailError:
                 thumbnail_payload = None
     finally:
@@ -187,9 +196,10 @@ async def finish_upload(
 
     update_payload = ProjectUpdate(
         project_id=payload.project_id,
-        status="upload_done",
+        status="uploaded",
         video_source=payload.object_key,
         thumbnail=thumbnail_payload,
+        duration_seconds=duration_seconds
     )
     try:
         get_pipeline_status(db, update_payload.project_id)
@@ -206,15 +216,15 @@ async def finish_upload(
         ) from exc
 
     await start_job(result, db)
-    await update_pipeline_stage(
-        db,
-        PipelineUpdate(
-            project_id=payload.project_id,
-            stage_id="upload",
-            status=PipelineStatus.COMPLETED,
-            progress=100,
-        ),
-    )
+    # await update_pipeline_stage(
+    #     db,
+    #     PipelineUpdate(
+    #         project_id=payload.project_id,
+    #         stage_id="upload",
+    #         status=PipelineStatus.COMPLETED,
+    #         progress=100,
+    #     ),
+    # )
 
     return result
 
@@ -229,9 +239,9 @@ def media_redirect(key: str):
         "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600
     )
 
-    resp = RedirectResponse(url, status_code=302)
-    resp.headers["Cache-Control"] = "private, max-age=300"
-    return resp
+    # resp = RedirectResponse(url, status_code=302)
+    # resp.headers["Cache-Control"] = "private, max-age=300"
+    return {"url": url}
 
 
 @upload_router.get("/{project_id}/events")

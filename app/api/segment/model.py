@@ -106,3 +106,5 @@ class SegmentRetranslateResponse(BaseModel):
     segment_id: PyObjectId
     segment_index: int
     status: str
+
+
