@@ -63,20 +63,6 @@ class ProjectUpdate(BaseModel):
     duration_seconds: Optional[int] = None
 
 
-class ProjectOut(BaseModel):
-    id: PyObjectId = Field(validation_alias="_id")
-    title: str
-    status: str
-    video_source: str | None
-    thumbnail: ProjectThumbnail | None = None
-    created_at: datetime
-    duration_seconds: Optional[int] | None = None
-    # segment_assets_prefix: Optional[str] = None
-    # segments: Optional[List[Dict[str, Any]]] = None
-    # owner_id: str
-    issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드
-
-
 class ProjectTargetStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
@@ -97,3 +83,17 @@ class ProjectTarget(BaseModel):
     language_code: str
     status: ProjectTargetStatus
     progress: int
+
+class ProjectOut(BaseModel):
+    id: PyObjectId = Field(validation_alias="_id")
+    title: str
+    status: str
+    video_source: str | None
+    thumbnail: ProjectThumbnail | None = None
+    created_at: datetime
+    duration_seconds: Optional[int] | None = None
+    # segment_assets_prefix: Optional[str] = None
+    # segments: Optional[List[Dict[str, Any]]] = None
+    # owner_id: str
+    issue_count: int = 0  # 새로 집계한 값을 넣기 위한 필드
+    targets: list[ProjectTarget] = Field(default_factory=list)
