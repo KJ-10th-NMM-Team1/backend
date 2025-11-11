@@ -11,8 +11,10 @@ from .models import (
     ProjectOut,
     ProjectTargetStatus,
     ProjectTarget,
+    ProjectTargetUpdate,
 )
-from ..pipeline.service import _create_default_pipeline
+
+# from ..pipeline.service import _create_default_pipeline
 
 
 class ProjectService:
@@ -193,7 +195,7 @@ class ProjectService:
         return result
 
     async def update_targets(
-        self, target_id: str, payload: ProjectTarget
+        self, target_id: str, payload: ProjectTargetUpdate
     ) -> List[ProjectTarget]:
         doc = await self.target_collection.find_one({"_id": ObjectId(target_id)})
         if not doc:

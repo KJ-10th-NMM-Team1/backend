@@ -86,6 +86,11 @@ class ProjectTarget(BaseModel):
     progress: int
 
 
+class ProjectTargetUpdate(BaseModel):
+    status: Optional[ProjectTargetStatus] = None
+    progress: Optional[int] = None
+
+
 class ProjectOut(BaseModel):
     id: PyObjectId = Field(validation_alias="_id")
     title: str
