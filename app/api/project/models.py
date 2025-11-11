@@ -37,6 +37,7 @@ class ProjectBase(BaseModel):
     source_language: Optional[str] = None
     target_languages: List[str] = []
     created_at: datetime
+    speaker_count: Optional[int] = None
 
 
 class ProjectPublic(ProjectBase):
@@ -96,6 +97,7 @@ class ProjectOut(BaseModel):
     targets: list[ProjectTarget] = Field(default_factory=list)
     source_language: Optional[str] = None
     created_at: datetime
+    speaker_count: Optional[int] = None
 
 
 class EditorPlaybackState(BaseModel):

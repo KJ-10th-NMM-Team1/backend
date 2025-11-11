@@ -81,6 +81,33 @@ class ProjectService:
             result.append(ProjectOut.model_validate(doc))
         return result
 
+    async def list_projects_with_targets(self) -> List[ProjectOut]:
+        pipeline = [
+            {"$addFields": {"project_id_str": {"$toString": "$_id"}}},
+            {"$sort": {"created_at": -1}},
+            {
+                "$lookup": {
+                    "from": "project_targets",
+                    "let": {"pid": "$project_id_str"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$project_id", "$$pid"]}}},
+                        {
+                            "$project": {
+                                "project_id": 1,
+                                "language_code": 1,
+                                "status": 1,
+                                "progress": 1,
+                            }
+                        },
+                    ],
+                    "as": "targets",
+                }
+            },
+            {"$addFields": {"targets": {"$ifNull": ["$targets", []]}}},
+        ]
+        docs = await self.project_collection.aggregate(pipeline).to_list(length=None)
+        return [ProjectOut.model_validate(doc) for doc in docs]
+
     async def delete_project(self, project_id: str) -> int:
         result = await self.project_collection.delete_one({"_id": project_id})
         return result.deleted_count
@@ -95,6 +122,7 @@ class ProjectService:
             source_language=payload.sourceLanguage,
             status="uploading",
             created_at=now,
+            speaker_count=payload.speakerCount,
         )
         doc = base.model_dump(exclude_none=True)
         result = await self.project_collection.insert_one(doc)
