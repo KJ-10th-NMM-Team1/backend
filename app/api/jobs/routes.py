@@ -88,32 +88,49 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             )
     # voice_sample_id가 있으면 audio_sample_url 업데이트
     if metadata and "voice_sample_id" in metadata:
-        if result.status == "done" and result.result_key:
+        if result.status == "done":
             voice_sample_id = metadata["voice_sample_id"]
             try:
                 service = VoiceSampleService(db)
 
-                # 샘플 조회하여 owner 확인
-                sample = await service.get_voice_sample(voice_sample_id)
-                if sample:
-                    # owner 정보 가져오기
-                    auth_service = AuthService(db)
-                    user_doc = await auth_service.get_user_by_sub(
-                        str(sample["owner_id"])
-                    )
-                    if user_doc:
-                        owner = UserOut(**user_doc)
+                # 샘플을 직접 DB에서 조회 (owner_id만 필요)
+                from bson import ObjectId
 
-                        # audio_sample_url 업데이트 (result_key를 storage API URL 로 변환)
-                        audio_sample_url = f"/api/storage/media/{result.result_key}"
-                        await service.update_voice_sample(
-                            voice_sample_id,
-                            VoiceSampleUpdate(audio_sample_url=audio_sample_url),
-                            owner,
+                try:
+                    sample_oid = ObjectId(voice_sample_id)
+                    sample_doc = await service.collection.find_one({"_id": sample_oid})
+                    if sample_doc:
+                        # owner_id로 사용자 조회
+                        auth_service = AuthService(db)
+                        owner_oid = sample_doc["owner_id"]
+                        user_doc = await auth_service.collection.find_one(
+                            {"_id": owner_oid}
                         )
-                        logger.info(
-                            f"Updated audio_sample_url for voice sample {voice_sample_id}"
-                        )
+                        if user_doc:
+                            owner = UserOut(**user_doc)
+
+                            # audio_sample_url 업데이트 (워커에서 보낸 값 우선, 없으면 result_key로 생성)
+                            audio_sample_url = metadata.get("audio_sample_url")
+                            if not audio_sample_url and result.result_key:
+                                audio_sample_url = (
+                                    f"/api/storage/media/{result.result_key}"
+                                )
+
+                            if audio_sample_url:
+                                await service.update_voice_sample(
+                                    voice_sample_id,
+                                    VoiceSampleUpdate(
+                                        audio_sample_url=audio_sample_url
+                                    ),
+                                    owner,
+                                )
+                                logger.info(
+                                    f"Updated audio_sample_url for voice sample {voice_sample_id}: {audio_sample_url}"
+                                )
+                except Exception as owner_exc:
+                    logger.error(
+                        f"Failed to get owner for voice sample {voice_sample_id}: {owner_exc}"
+                    )
             except Exception as exc:
                 logger.error(
                     f"Failed to update audio_sample_url for voice sample {voice_sample_id}: {exc}"
