@@ -36,7 +36,7 @@ project_router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
 @project_router.post(
-    "/",
+    "",
     response_model=ProjectCreateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="프로젝트 생성",
@@ -77,7 +77,7 @@ async def list_my_projects(
         ) from exc
 
 
-@project_router.get("/", summary="프로젝트 전체 목록")
+@project_router.get("", summary="프로젝트 전체 목록")
 async def list_projects(
     project_service: ProjectService = Depends(ProjectService),
 ) -> dict:
