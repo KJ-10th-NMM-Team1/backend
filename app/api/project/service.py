@@ -90,24 +90,15 @@ class ProjectService:
             {
                 "$lookup": {
                     "from": "project_targets",
-                    "let": {"pid": "$project_id_str"},
-                    "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$project_id", "$$pid"]}}},
-                        {
-                            "$project": {
-                                "project_id": 1,
-                                "language_code": 1,
-                                "status": 1,
-                                "progress": 1,
-                            }
-                        },
-                    ],
+                    "localField": "project_id_str",
+                    "foreignField": "project_id",
                     "as": "targets",
                 }
             },
-            {"$addFields": {"targets": {"$ifNull": ["$targets", []]}}},
         ]
         docs = await self.project_collection.aggregate(pipeline).to_list(length=None)
+        for doc in docs:
+            doc["targets"] = doc.get("targets") or []
         return [ProjectOut.model_validate(doc) for doc in docs]
 
     async def delete_project(self, project_id: str) -> int:
