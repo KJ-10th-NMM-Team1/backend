@@ -93,7 +93,7 @@ async def create_asset_from_result(
         asset_payload = AssetCreate(
             project_id=project_id,
             language_code=target_lang,
-            asset_type=AssetType.DUBBED_VIDEO,
+            asset_type=AssetType.PREVIEW,
             file_path=result_key,
         )
         await asset_service.create_asset(asset_payload)
@@ -235,7 +235,8 @@ async def check_and_create_segments(
             if translated_texts and i < len(translated_texts):
                 # 새 포맷 사용
                 translated_text = translated_texts[i]
-                audio_url = None  # 새 포맷에서는 audio_url이 별도로 전달됨
+                # 새 포맷에서도 audio_file이 segments에 포함될 수 있음
+                audio_url = seg.get("audio_file")
             else:
                 # 기존 포맷 사용
                 translated_text = seg.get("prompt_text", "")
@@ -277,7 +278,7 @@ async def process_md_completion(
     project_id: str,
     metadata: dict,
     result_key: str,
-    defaultTaget: str = None,
+    defaultTarget: str = None,
 ) -> None:
     """
     Done 시 처리: asset 생성, 세그먼트 생성, 번역 저장
@@ -286,10 +287,10 @@ async def process_md_completion(
     1. 기존 포맷: {"target_lang": "en", "segments": [{...}]}
     2. 새 포맷: {"target_lang": "en", "metadata_key": "s3://path/to/metadata.json"}
     """
-    target_lang = metadata.get("target_lang", defaultTaget)
+    target_lang = metadata.get("target_lang") or defaultTarget
     if not target_lang:
         logger.warning(
-            f"No target_lang in metadata for project {project_id}"
+            f"No target_lang in metadata or defaultTarget for project {project_id}"
         )
         return
 
@@ -311,24 +312,31 @@ async def process_md_completion(
             logger.info(f"Downloading metadata from S3: {metadata_key}")
             s3_metadata = await download_metadata_from_s3(metadata_key)
 
-            # metadata 파싱하여 segments 추출
-            segments = parse_segments_from_metadata(s3_metadata)
+            # metadata 파싱하여 segments와 translations 추출
+            segments, parsed_translations = parse_segments_from_metadata(s3_metadata)
 
-            # 번역된 텍스트 추출 (metadata에 translations가 있을 수 있음)
-            # 워커가 번역된 텍스트를 별도로 전달하는 경우
-            translated_texts = metadata.get("translations") or metadata.get("translated_texts")
+            # 번역된 텍스트: S3 메타데이터에서 파싱된 것 우선, 없으면 콜백 metadata에서
+            translated_texts = (
+                parsed_translations
+                or metadata.get("translations")
+                or metadata.get("translated_texts")
+            )
 
             if segments:
-                logger.info(f"Processing {len(segments)} segments from S3 metadata for {target_lang}")
+                logger.info(
+                    f"Processing {len(segments)} segments from S3 metadata for {target_lang}"
+                )
                 await check_and_create_segments(
                     db,
                     project_id,
                     segments,
                     target_lang,
-                    translated_texts=translated_texts
+                    translated_texts=translated_texts,
                 )
             else:
-                logger.warning(f"No segments found in S3 metadata for project {project_id}")
+                logger.warning(
+                    f"No segments found in S3 metadata for project {project_id}"
+                )
         except Exception as exc:
             logger.error(f"Failed to process S3 metadata: {exc}")
             # S3 메타데이터 처리 실패 시 기존 방식으로 fallback
@@ -425,6 +433,8 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
     stage = metadata["stage"]
     project_id = result.project_id
 
+    print(f"metadata for job {job_id}, stage {stage}: {metadata}")
+
     # metadata에서 language_code 추출 (target_lang)
     language_code = metadata.get("target_lang") or metadata.get("language_code")
 
@@ -483,7 +493,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
         target_update = ProjectTargetUpdate(
             status=ProjectTargetStatus.PROCESSING, progress=36  # TTS 시작 시 55%
         )
-    elif stage == "tts_completed":  # TTS 완료 - 최종 완료 처리
+    elif stage == "tts_completed":  # TTS 완료
         target_update = ProjectTargetUpdate(
             status=ProjectTargetStatus.COMPLETED, progress=70  # TTS 완료
         )
@@ -494,8 +504,11 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
         )
     elif stage == "done":  # 비디오 처리 완료
         # 새로운 처리 함수 호출: asset 생성 및 세그먼트 생성
+        # result_key는 metadata 또는 result에서 가져옴
+        final_result_key = metadata.get("result_key") or result.result_key
+
         await process_md_completion(
-            db, project_id, metadata, result.result_key, defaultTaget=language_code
+            db, project_id, metadata, final_result_key, defaultTarget=language_code
         )
 
         target_update = ProjectTargetUpdate(
@@ -506,6 +519,8 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
         target_update = ProjectTargetUpdate(
             status=ProjectTargetStatus.FAILED, progress=0
         )
+
+    print(f"target_lang for job {job_id}, stage {stage}: {language_code}")
 
     # project_target 업데이트 실행
     if target_update:
