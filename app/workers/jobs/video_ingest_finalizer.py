@@ -1,9 +1,13 @@
-from app.api.jobs.service import start_job
+import logging
+from app.api.jobs.service import start_job, start_jobs_for_targets
 from app.api.pipeline.models import PipelineStatus, PipelineUpdate
 from app.api.pipeline.service import update_pipeline_stage
 from app.api.project.models import ProjectUpdate, ProjectThumbnail
 from app.api.project.service import ProjectService
 from app.config.db import make_db
+from app.utils.job_utils import process_project_jobs
+
+logger = logging.getLogger(__name__)
 
 # 워커 전용 Mongo 클라이언트 (API와 분리)
 worker_db = make_db()
@@ -24,15 +28,16 @@ async def finalize_ingest(
         duration_seconds=duration_seconds,
     )
     project = await project_service.update_project(payload=update_payload)
-    await start_job(project, worker_db)
 
-    # pipeline -> project_target 으로 변경
-    # await update_pipeline_stage(
-    #     worker_db,
-    #     PipelineUpdate(
-    #         project_id=project_id,
-    #         stage_id="upload",
-    #         status=PipelineStatus.COMPLETED,
-    #         progress=100,
-    #     ),
-    # )
+    # 공통 job 처리 로직 사용
+    await process_project_jobs(
+        project=project,
+        project_id=project_id,
+        project_service=project_service,
+        start_job=start_job,
+        start_jobs_for_targets=start_jobs_for_targets,
+        db=worker_db,
+        context="finalize_ingest"
+    )
+
+    # pipeline -> project_target 으로 변경 (이미 start_jobs_for_targets에서 처리됨)

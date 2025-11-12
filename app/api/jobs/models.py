@@ -15,6 +15,7 @@ class JobCreate(BaseModel):
     metadata: Optional[dict[str, Any]] = None
     task: Optional[str] = None
     task_payload: Optional[dict[str, Any]] = None
+    target_lang: Optional[str] = None  # 타겟 언어 코드 추가
 
 
 class JobHistoryEntry(BaseModel):
@@ -34,6 +35,7 @@ class JobRead(BaseModel):
     metadata: Optional[dict[str, Any]] = None
     task: Optional[str] = None
     task_payload: Optional[dict[str, Any]] = None
+    target_lang: Optional[str] = None  # 타겟 언어 코드 추가
     created_at: datetime
     updated_at: datetime
     history: list[JobHistoryEntry] = Field(default_factory=list)

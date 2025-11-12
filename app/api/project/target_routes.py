@@ -40,5 +40,5 @@ async def update_targets_by_project(
     target: ProjectTargetUpdate,
     project_service: ProjectService = Depends(ProjectService),
 ) -> ProjectTarget:
-    updated_targets = await project_service.update_targets(target_id, target)
-    return updated_targets
+    updated_target = await project_service.update_target(target_id, target)
+    return updated_target

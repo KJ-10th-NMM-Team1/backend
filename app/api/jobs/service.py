@@ -55,6 +55,7 @@ def _serialize_job(doc: dict[str, Any]) -> JobRead:
             "history": doc.get("history", []),
             "task": doc.get("task"),
             "task_payload": doc.get("task_payload"),
+            "target_lang": doc.get("target_lang"),  # 타겟 언어 추가
         }
     )
 
@@ -69,6 +70,10 @@ def _build_job_message(job: JobRead) -> dict[str, Any]:
     }
     if job.input_key:
         message["input_key"] = job.input_key
+
+    # 타겟 언어가 있으면 메시지에 포함
+    if job.target_lang:
+        message["target_lang"] = job.target_lang
 
     payload = job.task_payload or {}
     if task == "segment_tts":
@@ -240,6 +245,7 @@ async def create_job(
         ],
         "task": payload.task or "full_pipeline",
         "task_payload": payload.task_payload or None,
+        "target_lang": payload.target_lang,  # 타겟 언어 저장
     }
 
     try:
@@ -393,7 +399,7 @@ async def enqueue_job(job: JobRead, voice_config: Optional[dict] = None) -> None
             detail="JOB_QUEUE_URL env not set",
         )
 
-    message_payload = _build_job_message(job)
+    message_payload = _build_job_message(job)  # in callback_url
     if voice_config:
         message_payload["voice_config"] = voice_config
     message_body = json.dumps(message_payload)
@@ -417,15 +423,75 @@ async def enqueue_job(job: JobRead, voice_config: Optional[dict] = None) -> None
         message_kwargs["MessageDeduplicationId"] = job.job_id
 
     try:
-        await asyncio.to_thread(_sqs_client.send_message, **message_kwargs)
+        response = await asyncio.to_thread(_sqs_client.send_message, **message_kwargs)
+        logger.info("SQS send_message response for job %s: %s", job.job_id, response)
     except (BotoCoreError, ClientError) as exc:
         if APP_ENV in {"dev", "development", "local"}:
             logger.error("SQS publish failed in %s env: %s", APP_ENV, exc)
-            return
         raise SqsPublishError("Failed to publish job message to SQS") from exc
 
 
+async def start_jobs_for_targets(project: ProjectPublic, target_languages: list[str], db: DbDep):
+    """타겟 언어별로 여러 job을 생성하고 큐에 추가"""
+    callback_base = _resolve_callback_base()
+    jobs_created = []
+
+    # 프로젝트의 보이스 설정 조회
+    voice_config = None
+    try:
+        project_doc = await db["projects"].find_one(
+            {"_id": ObjectId(project.project_id)}
+        )
+        if project_doc and "voice_config" in project_doc:
+            voice_config = project_doc["voice_config"]
+    except Exception as exc:
+        logger.warning(
+            "Failed to load voice_config for project %s: %s", project.project_id, exc
+        )
+
+    # 각 타겟 언어에 대해 job 생성
+    for target_lang in target_languages:
+        job_oid = ObjectId()
+        callback_url = f"{callback_base.rstrip('/')}/api/jobs/{job_oid}/status"
+        job_payload = JobCreate(
+            project_id=project.project_id,
+            input_key=project.video_source,
+            callback_url=callback_url,
+            target_lang=target_lang,  # 타겟 언어 추가
+        )
+
+        try:
+            job = await create_job(db, job_payload, job_oid=job_oid)
+            await enqueue_job(job, voice_config=voice_config)
+            jobs_created.append({
+                "project_id": project.project_id,
+                "job_id": job.job_id,
+                "target_lang": target_lang,
+                "status": job.status,
+            })
+            logger.info(f"Created job {job.job_id} for language {target_lang}")
+        except (SqsPublishError, Exception) as exc:
+            logger.error(f"Failed to create/enqueue job for language {target_lang}: {exc}")
+            # 실패한 job은 failed로 마킹하지만 다른 언어는 계속 진행
+            if isinstance(job_oid, ObjectId):
+                await mark_job_failed(
+                    db,
+                    str(job_oid),
+                    error="sqs_publish_failed",
+                    message=str(exc),
+                )
+
+    if not jobs_created:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to create any jobs",
+        )
+
+    return jobs_created
+
+
 async def start_job(project: ProjectPublic, db: DbDep):
+    """단일 job 생성 (기존 호환성 유지)"""
     callback_base = _resolve_callback_base()
     job_oid = ObjectId()
     callback_url = f"{callback_base.rstrip('/')}/api/jobs/{job_oid}/status"

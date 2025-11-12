@@ -1,6 +1,7 @@
 # app/api/routes/upload.py
 import os
 import asyncio
+import logging
 import tempfile
 import logging
 from uuid import uuid4
@@ -14,9 +15,10 @@ from rq import Queue
 from pymongo.errors import PyMongoError
 from botocore.exceptions import ClientError
 
-from app.api.jobs.service import start_job
+from app.api.jobs.service import start_job, start_jobs_for_targets
 from app.api.project.service import ProjectService
 from app.config.s3 import s3
+from app.utils.job_utils import process_project_jobs
 from ..deps import DbDep
 from bson.errors import InvalidId
 from ..project.models import ProjectUpdate
@@ -33,6 +35,7 @@ from app.utils.thumbnail import extract_and_upload_thumbnail, ThumbnailError
 from pathlib import Path
 from moviepy.editor import VideoFileClip
 
+logger = logging.getLogger(__name__)
 upload_router = APIRouter(prefix="/storage", tags=["storage"])
 logger = logging.getLogger("api_logger")
 
@@ -219,16 +222,16 @@ async def finish_upload(
             detail="Failed to update project",
         ) from exc
 
-    await start_job(result, db)
-    # await update_pipeline_stage(
-    #     db,
-    #     PipelineUpdate(
-    #         project_id=payload.project_id,
-    #         stage_id="upload",
-    #         status=PipelineStatus.COMPLETED,
-    #         progress=100,
-    #     ),
-    # )
+    # 공통 job 처리 로직 사용
+    await process_project_jobs(
+        project=result,
+        project_id=payload.project_id,
+        project_service=project_service,
+        start_job=start_job,
+        start_jobs_for_targets=start_jobs_for_targets,
+        db=db,
+        context="finish_upload"
+    )
 
     return result
 
