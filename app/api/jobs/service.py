@@ -424,7 +424,6 @@ async def enqueue_job(job: JobRead, voice_config: Optional[dict] = None) -> None
 
     try:
         response = await asyncio.to_thread(_sqs_client.send_message, **message_kwargs)
-        logger.info("SQS send_message response for job %s: %s", job.job_id, response)
     except (BotoCoreError, ClientError) as exc:
         if APP_ENV in {"dev", "development", "local"}:
             logger.error("SQS publish failed in %s env: %s", APP_ENV, exc)
@@ -469,7 +468,6 @@ async def start_jobs_for_targets(project: ProjectPublic, target_languages: list[
                 "target_lang": target_lang,
                 "status": job.status,
             })
-            logger.info(f"Created job {job.job_id} for language {target_lang}")
         except (SqsPublishError, Exception) as exc:
             logger.error(f"Failed to create/enqueue job for language {target_lang}: {exc}")
             # 실패한 job은 failed로 마킹하지만 다른 언어는 계속 진행

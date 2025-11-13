@@ -39,14 +39,12 @@ async def download_metadata_from_s3(metadata_key: str) -> dict:
 
         if is_gzipped:
             # gzip 압축 해제
-            logger.info(f"Decompressing gzipped metadata: {metadata_key}")
             decompressed = await asyncio.to_thread(gzip.decompress, content)
             metadata = json.loads(decompressed.decode("utf-8"))
         else:
             # 일반 JSON
             metadata = json.loads(content.decode("utf-8"))
 
-        logger.info(f"Downloaded metadata from s3://{AWS_S3_BUCKET}/{metadata_key}")
         return metadata
     except gzip.BadGzipFile as exc:
         logger.error(f"Failed to decompress gzipped file {metadata_key}: {exc}")
@@ -153,9 +151,6 @@ def parse_segments_from_metadata(metadata: dict) -> tuple[list[dict], list[str]]
             # 번역 텍스트 추가
             translations.append(trans_map.get(idx, ""))
 
-        logger.info(
-            f"Parsed {len(parsed_segments)} segments and {len(translations)} translations from new format metadata"
-        )
         return parsed_segments, translations
 
     else:
@@ -198,8 +193,4 @@ def parse_segments_from_metadata(metadata: dict) -> tuple[list[dict], list[str]]
             }
 
             parsed_segments.append(segment_record)
-
-        logger.info(
-            f"Parsed {len(parsed_segments)} segments from transcript format metadata"
-        )
         return parsed_segments, []  # 기존 포맷은 번역이 없음
