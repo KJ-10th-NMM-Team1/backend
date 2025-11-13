@@ -29,6 +29,11 @@ from app.workers.jobs.video_ingest_progress import (
     update_job_stage,
 )
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 async def _download_youtube_video(
     url: str,
@@ -104,6 +109,8 @@ async def _download_youtube_video(
 
         # 환경변수로 쿠키 파일 경로 설정 가능
         cookies_path = os.getenv("YOUTUBE_COOKIES_FILE")
+        logger.info(f"cookie 경로 확인: ${cookies_path}")
+        
         if cookies_path and os.path.exists(cookies_path):
             ydl_opts["cookiefile"] = cookies_path
 
