@@ -30,5 +30,4 @@ app.include_router(api_router)
 @app.get("/", tags=["Status"])
 async def read_root(db: DbDep):
     users = await db["users"].find().to_list()
-    print(users)
     return {"status": "API Gateway is running. Visit /docs for API documentation."}

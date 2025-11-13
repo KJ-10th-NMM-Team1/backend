@@ -8,29 +8,28 @@ from starlette.responses import Response
 logger = logging.getLogger("api_logger")
 logger.setLevel(logging.INFO)
 # 로그 포맷 설정 (시간 - 로거이름 - 레벨 - 메시지)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+
 class LoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         client_ip = request.client.host
         method = request.method
         path = request.url.path
-        
-        logger.info(f"Request: {method} {path} from {client_ip}")
 
-        start_time = time.time()
-        
         # (중요) 실제 엔드포인트 실행
         response = await call_next(request)
-        
+
         # --- (2) 응답 처리 후 ---
         process_time = time.time() - start_time
         status_code = response.status_code
-        
+
         # 응답 로그 (처리 시간과 상태 코드를 포함)
         logger.info(f"Response: {status_code} | Process Time: {process_time:.4f}s")
-        
+
         return response

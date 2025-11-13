@@ -111,9 +111,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                             VoiceSampleUpdate(audio_sample_url=audio_sample_url),
                             owner,
                         )
-                        logger.info(
-                            f"Updated audio_sample_url for voice sample {voice_sample_id}"
-                        )
             except Exception as exc:
                 logger.error(
                     f"Failed to update audio_sample_url for voice sample {voice_sample_id}: {exc}"
