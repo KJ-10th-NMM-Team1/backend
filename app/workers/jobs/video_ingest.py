@@ -56,7 +56,7 @@ async def _download_youtube_video(
 
         ydl_opts = {
             "outtmpl": os.path.join(temp_dir, "%(id)s.%(ext)s"),
-            # 낮은 화질도 허용하여 다운로드 성공률 높이기
+            # 낮은 화질도 허용하여 다운로드 성공률 높이기 
             "format": "best",
             "merge_output_format": "mp4",
             # Bot detection 회피를 위한 옵션들
