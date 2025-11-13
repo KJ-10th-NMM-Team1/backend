@@ -109,8 +109,7 @@ async def _download_youtube_video(
 
         # 환경변수로 쿠키 파일 경로 설정 가능
         cookies_path = os.getenv("YOUTUBE_COOKIES_FILE")
-        logger.info(f"cookie 경로 확인: ${cookies_path}")
-        
+        logger.info(f'쿠키 환경 변수 확인: {cookies_path}')
         if cookies_path and os.path.exists(cookies_path):
             ydl_opts["cookiefile"] = cookies_path
 
