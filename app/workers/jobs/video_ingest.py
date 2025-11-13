@@ -112,6 +112,11 @@ async def _download_youtube_video(
         if cookies_path and os.path.exists(cookies_path):
             ydl_opts["cookiefile"] = cookies_path
 
+        cookies = ydl_opts.get('cookiefile')
+
+        logger.info(f'{cookies}')
+        
+
         # 프록시 설정 (필요시)
         proxy_url = os.getenv("YOUTUBE_PROXY")
         if proxy_url:
