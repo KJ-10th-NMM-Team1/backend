@@ -120,11 +120,14 @@ def parse_segments_from_metadata(metadata: dict) -> tuple[list[dict], list[str]]
         for idx, seg in enumerate(segments_data):
             # segment_id에서 스피커 정보 추출 (예: "SPEAKER_00_0.22.wav"에서)
             audio_file = seg.get("audio_file", "")
-            speaker_tag = "SPEAKER_00"  # 기본값
-            start_time = 0.0
+            speaker_tag = seg.get(
+                "speaker", "SPEAKER_00"
+            )  # segments에서 speaker 가져오기
+            start_time = seg.get("start", 0.0)  # segments에서 start 가져오기
+            end_time = seg.get("end", 0.0)  # segments에서 end 가져오기
 
-            if audio_file:
-                # 파일명에서 정보 추출 시도
+            if not start_time and audio_file:
+                # 파일명에서 정보 추출 시도 (fallback)
                 # 예: "SPEAKER_00_0.22.wav" 또는 "SPEAKER_00_13.43.wav"
                 import re
 
@@ -133,16 +136,19 @@ def parse_segments_from_metadata(metadata: dict) -> tuple[list[dict], list[str]]
                     speaker_tag = match.group(1)
                     start_time = float(match.group(2))
 
-            # duration을 사용해서 end time 계산
-            source_duration = seg.get("source_duration", 0)
-            end_time = start_time + source_duration
+            # duration을 사용해서 end time 계산 (start_time이 있고 end_time이 없을 때만)
+            if start_time and not end_time:
+                source_duration = seg.get("source_duration", 0)
+                end_time = start_time + source_duration
 
             segment_record = {
                 "segment_index": idx,
                 "speaker_tag": speaker_tag,
                 "start": start_time,
                 "end": end_time,
-                "source_text": "",  # 새 포맷에는 원본 텍스트가 없음
+                "source_text": seg.get(
+                    "source_text", ""
+                ),  # segments에서 source_text 추출
                 "audio_file": audio_file,  # 추가 정보 보존
             }
 

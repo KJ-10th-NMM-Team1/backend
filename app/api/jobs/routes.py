@@ -159,7 +159,7 @@ async def check_and_create_segments(
                     "speaker_tag": seg.get("speaker", ""),
                     "start": float(seg.get("start", 0)),
                     "end": float(seg.get("end", 0)),
-                    "source_text": seg.get("prompt_text", ""),
+                    "source_text": seg.get("source_text", ""),
                     "is_verified": False,
                     "created_at": now,
                     "updated_at": now,
