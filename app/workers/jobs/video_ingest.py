@@ -102,17 +102,20 @@ async def _download_youtube_video(
             "extractor_args": {
                 "youtube": {
                     "player_client": ["android", "web"],  # Android 클라이언트도 시도
-                    "skip": ["hls", "dash"],  # 문제가 될 수 있는 포맷 스킵
+                    # "skip": ["hls", "dash"],  # 문제가 될 수 있는 포맷 스킵
                 }
             },
         }
 
         # 환경변수로 쿠키 파일 경로 설정 가능
         cookies_path = os.getenv("YOUTUBE_COOKIES_FILE")
-        logger.info(f"cookie 경로 확인: ${cookies_path}")
-        
         if cookies_path and os.path.exists(cookies_path):
             ydl_opts["cookiefile"] = cookies_path
+
+        cookies = ydl_opts.get('cookiefile')
+
+        logger.info(f'{cookies}')
+        
 
         # 프록시 설정 (필요시)
         proxy_url = os.getenv("YOUTUBE_PROXY")
