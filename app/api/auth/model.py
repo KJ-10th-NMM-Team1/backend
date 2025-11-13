@@ -51,3 +51,8 @@ class TokenData(BaseModel):
 # RefreshToken 요청 모델 추가
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6)
