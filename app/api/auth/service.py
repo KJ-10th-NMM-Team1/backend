@@ -202,6 +202,36 @@ class AuthService:
 
         return user
 
+    async def change_password(
+        self, email: str, current_password: str, new_password: str
+    ) -> None:
+        user = await self.get_user_by_email(email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+
+        if not user.get("hashed_password"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password cannot be changed for this account.",
+            )
+
+        if not self.verify_password(current_password, user["hashed_password"]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect.",
+            )
+
+        new_hashed_password = self.get_password_hash(new_password)
+        await self.collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {"hashed_password": new_hashed_password},
+                "$unset": {"current_session": ""},
+            },
+        )
+
 
 async def get_current_user(db: DbDep, token: str = Depends(oauth2_scheme)) -> User:
     credentials_exception = HTTPException(
