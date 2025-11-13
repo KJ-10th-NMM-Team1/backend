@@ -398,6 +398,8 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                         )
                         if user_doc:
                             owner = UserOut(**user_doc)
+                            # 업데이트할 데이터 구성
+                            update_data = {}
 
                             # audio_sample_url 업데이트 (워커에서 보낸 값 우선, 없으면 result_key로 생성)
                             audio_sample_url = metadata.get("audio_sample_url")
@@ -407,16 +409,25 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                                 )
 
                             if audio_sample_url:
+                                update_data["audio_sample_url"] = audio_sample_url
+
+                            # prompt_text 업데이트
+                            prompt_text = metadata.get("prompt_text")
+                            if prompt_text:
+                                update_data["prompt_text"] = prompt_text
+
+                            if update_data:
                                 await service.update_voice_sample(
                                     voice_sample_id,
-                                    VoiceSampleUpdate(
-                                        audio_sample_url=audio_sample_url
-                                    ),
+                                    VoiceSampleUpdate(**update_data),
                                     owner,
                                 )
                                 logger.info(
-                                    f"Updated audio_sample_url for voice sample {voice_sample_id}: {audio_sample_url}"
+                                    f"Updated voice sample {voice_sample_id}: "
+                                    f"audio_sample_url={audio_sample_url}, "
+                                    f"prompt_text={'present' if prompt_text else 'none'}"
                                 )
+
                 except Exception as owner_exc:
                     logger.error(
                         f"Failed to get owner for voice sample {voice_sample_id}: {owner_exc}"

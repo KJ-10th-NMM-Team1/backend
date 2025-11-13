@@ -16,6 +16,7 @@ class VoiceSampleCreate(BaseModel):
     is_public: bool = Field(default=False, description="공개 여부")
     file_path_wav: str = Field(..., description="S3 파일 경로 (mp3 또는 wav)")
     audio_sample_url: Optional[str] = Field(None, description="미리듣기용 음성 URL")
+    prompt_text: Optional[str] = Field(None, description="STT로 추출한 프롬프트 텍스트")
 
 
 class VoiceSamplePrepareUpload(BaseModel):
@@ -43,6 +44,7 @@ class VoiceSampleUpdate(BaseModel):
     description: Optional[str] = None
     is_public: Optional[bool] = None
     audio_sample_url: Optional[str] = None
+    prompt_text: Optional[str] = None
 
 
 class VoiceSampleOut(BaseModel):
@@ -57,6 +59,7 @@ class VoiceSampleOut(BaseModel):
     audio_sample_url: Optional[str] = None
     created_at: datetime
     is_favorite: bool = Field(default=False, description="현재 사용자의 즐겨찾기 여부")
+    prompt_text: Optional[str] = None
 
     class Config:
         populate_by_name = True

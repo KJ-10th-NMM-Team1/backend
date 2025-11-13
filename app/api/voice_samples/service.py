@@ -33,6 +33,7 @@ class VoiceSampleService:
             "is_public": data.is_public,
             "file_path_wav": data.file_path_wav,
             "audio_sample_url": data.audio_sample_url,
+            "prompt_text": data.prompt_text,
             "created_at": datetime.utcnow(),
         }
 
@@ -247,6 +248,8 @@ class VoiceSampleService:
             update_data["is_public"] = data.is_public
         if data.audio_sample_url is not None:
             update_data["audio_sample_url"] = data.audio_sample_url
+        if data.prompt_text is not None:
+            update_data["prompt_text"] = data.prompt_text
 
         if not update_data:
             return VoiceSampleOut(**sample, is_favorite=False)
