@@ -40,10 +40,7 @@ async def process_project_jobs(
         if target_languages:
             # 타겟 언어별로 job 생성
             jobs = await start_jobs_for_targets(project, target_languages, db)
-            logger.info(
-                f"[{context}] Created {len(jobs)} jobs for project {project_id} "
-                f"with languages: {target_languages}"
-            )
+           
         else:
             # 타겟 언어가 없으면 기존 방식 사용
             logger.warning(
@@ -53,8 +50,4 @@ async def process_project_jobs(
             await start_job(project, db)
     else:
         # 타겟이 없으면 기존 방식 사용
-        logger.info(
-            f"[{context}] No targets configured for project {project_id}, "
-            f"using default job"
-        )
         await start_job(project, db)

@@ -34,7 +34,6 @@ class SegmentService:
                 segment["_id"] = str(segment["_id"])
                 segments.append(segment)
 
-            logger.info(f"Found {len(segments)} segments for project {project_id}")
             return segments
 
         except Exception as exc:
@@ -129,10 +128,7 @@ class SegmentService:
             # segment_index로 정렬
             translations.sort(key=lambda x: x.get("segment_index", 0))
 
-            logger.info(
-                f"Found {len(translations)} translations for project {project_id}"
-                f"{f' with language {language_code}' if language_code else ''}"
-            )
+          
             return translations
 
         except Exception as exc:

@@ -97,7 +97,6 @@ async def create_asset_from_result(
             file_path=result_key,
         )
         await asset_service.create_asset(asset_payload)
-        logger.info(f"Created asset for project {project_id}, language {target_lang}")
     except Exception as exc:
         logger.error(f"Failed to create asset: {exc}")
 
@@ -186,9 +185,6 @@ async def check_and_create_segments(
                 for idx, seg_id in enumerate(result.inserted_ids):
                     segment_ids_map[segments_to_create[idx]["segment_index"]] = seg_id
 
-                logger.info(
-                    f"Created {len(segments_to_create)} segments for project {project_id}"
-                )
                 segments_created = True
             except Exception as exc:
                 logger.error(f"Failed to create segments: {exc}")
@@ -197,10 +193,7 @@ async def check_and_create_segments(
         # 기존 세그먼트가 있으면 ID 매핑만 생성
         for seg in existing_segments:
             segment_ids_map[seg.get("segment_index", 0)] = seg["_id"]
-        logger.info(
-            f"Using existing {len(existing_segments)} segments for project {project_id}"
-        )
-
+       
     # 번역 세그먼트 생성 (타겟 언어별로 생성)
     if segments and target_lang:
         translations_to_create = []
@@ -264,9 +257,7 @@ async def check_and_create_segments(
                         {"$set": trans},
                         upsert=True,
                     )
-                logger.info(
-                    f"Created/Updated {len(translations_to_create)} translations for language {target_lang}"
-                )
+              
             except Exception as exc:
                 logger.error(f"Failed to create segment translations: {exc}")
 
@@ -294,9 +285,6 @@ async def process_md_completion(
         )
         return
 
-    logger.info(
-        f"Processing completion for project {project_id}, language {target_lang}"
-    )
 
     # 1. Asset 생성 (완성된 더빙 비디오)
     if result_key:
@@ -309,7 +297,6 @@ async def process_md_completion(
     if metadata_key:
         # 새 포맷: S3에서 metadata 다운로드
         try:
-            logger.info(f"Downloading metadata from S3: {metadata_key}")
             s3_metadata = await download_metadata_from_s3(metadata_key)
 
             # metadata 파싱하여 segments와 translations 추출
@@ -323,9 +310,6 @@ async def process_md_completion(
             )
 
             if segments:
-                logger.info(
-                    f"Processing {len(segments)} segments from S3 metadata for {target_lang}"
-                )
                 await check_and_create_segments(
                     db,
                     project_id,
@@ -342,13 +326,11 @@ async def process_md_completion(
             # S3 메타데이터 처리 실패 시 기존 방식으로 fallback
             segments = metadata.get("segments", [])
             if segments:
-                logger.info(f"Falling back to inline segments for {target_lang}")
                 await check_and_create_segments(db, project_id, segments, target_lang)
     else:
         # 기존 포맷: metadata에 직접 segments가 포함됨
         segments = metadata.get("segments", [])
         if segments:
-            logger.info(f"Processing {len(segments)} inline segments for {target_lang}")
             await check_and_create_segments(db, project_id, segments, target_lang)
         else:
             logger.warning(
@@ -422,11 +404,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                                     VoiceSampleUpdate(**update_data),
                                     owner,
                                 )
-                                logger.info(
-                                    f"Updated voice sample {voice_sample_id}: "
-                                    f"audio_sample_url={audio_sample_url}, "
-                                    f"prompt_text={'present' if prompt_text else 'none'}"
-                                )
+                         
 
                 except Exception as owner_exc:
                     logger.error(
@@ -462,10 +440,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                 # 유틸 함수로 첫 번째 타겟의 언어 코드 추출
                 language_code = extract_language_code(targets[0])
 
-                if language_code:
-                    logger.info(
-                        f"Using first target language {language_code} for job {job_id}"
-                    )
         except Exception as exc:
             logger.error(f"Failed to get project targets: {exc}")
 
@@ -541,9 +515,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                 await project_service.update_targets_by_project_and_language(
                     project_id, language_code, target_update
                 )
-                logger.info(
-                    f"Updated project_target for project {project_id}, language {language_code}, stage {stage}"
-                )
+              
                 # SSE 이벤트 브로드캐스트
                 await dispatch_target_update(
                     project_id,

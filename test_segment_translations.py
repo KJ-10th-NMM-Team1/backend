@@ -32,13 +32,11 @@ async def test_segment_translations():
             return
 
         project_id = str(project["_id"])
-        logger.info(f"Using project: {project_id}")
 
         # Step 2: Check existing segments
         existing_segments = await db["project_segments"].count_documents({
             "project_id": project["_id"]
         })
-        logger.info(f"Existing segments: {existing_segments}")
 
         # Step 3: Find a job for this project
         job = await db["jobs"].find_one({
@@ -51,7 +49,6 @@ async def test_segment_translations():
 
         job_id = str(job["_id"])
         target_lang = job.get("target_lang", "ko")
-        logger.info(f"Using job: {job_id}, target language: {target_lang}")
 
         # Step 4: Simulate TTS completion callback
         test_segments = [
@@ -94,26 +91,18 @@ async def test_segment_translations():
         )
 
         # Execute the callback
-        logger.info("Executing TTS completion callback...")
         result = await set_job_status(job_id, payload, db)
-        logger.info(f"Callback result: {result}")
 
         # Step 7: Verify results
         # Check project_segments
         segments_count = await db["project_segments"].count_documents({
             "project_id": project["_id"]
         })
-        logger.info(f"Total project_segments after callback: {segments_count}")
 
         # Check segment_translations
         translations = await db["segment_translations"].find({
             "language_code": target_lang
         }).to_list(None)
-
-        logger.info(f"Found {len(translations)} segment_translations for language '{target_lang}'")
-
-        for trans in translations:
-            logger.info(f"  - Segment {trans.get('segment_id')}: {trans.get('target_text')[:50]}...")
 
         # Check assets
         assets = await db["assets"].find({
@@ -121,11 +110,6 @@ async def test_segment_translations():
             "language_code": target_lang
         }).to_list(None)
 
-        logger.info(f"Found {len(assets)} assets for language '{target_lang}'")
-        for asset in assets:
-            logger.info(f"  - Asset type: {asset.get('asset_type')}, path: {asset.get('file_path')}")
-
-        logger.info("\n✅ Test completed successfully!")
 
     except Exception as e:
         logger.error(f"Test failed: {e}", exc_info=True)
