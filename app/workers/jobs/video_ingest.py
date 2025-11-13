@@ -37,13 +37,87 @@ async def _download_youtube_video(
     progress_hook: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[Path, dict[str, Any] | None]:
     def _download() -> Path:
+        import random
+        import time
+
+        # 다양한 User-Agent 목록
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15",
+        ]
+
         ydl_opts = {
             "outtmpl": os.path.join(temp_dir, "%(id)s.%(ext)s"),
-            "format": "bestvideo[ext=mp4]+bestaudio/best",
+            # 낮은 화질도 허용하여 다운로드 성공률 높이기
+            "format": "best[height<=720]/bestvideo[height<=720]+bestaudio/best",
             "merge_output_format": "mp4",
+            # Bot detection 회피를 위한 옵션들
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": False,
+            # 랜덤 User-Agent 설정
+            "headers": {
+                "User-Agent": random.choice(user_agents),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
+                "DNT": "1",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Cache-Control": "max-age=0",
+            },
+            # 추가 옵션들
+            "nocheckcertificate": True,
+            "ignoreerrors": False,
+            "logtostderr": False,
+            "verbose": False,
+            "no_color": True,
+            # Sleep intervals - 더 길게 설정하여 rate limiting 회피
+            "sleep_interval": 2,
+            "max_sleep_interval": 5,
+            "sleep_interval_requests": 2,
+            # 추가 회피 옵션들
+            "age_limit": None,
+            "download_archive": None,
+            "force_generic_extractor": False,
+            # 재시도 옵션
+            "retries": 3,
+            "fragment_retries": 3,
+            "skip_unavailable_fragments": True,
+            # 네트워크 옵션
+            "socket_timeout": 30,
+            # 추가 extractor 옵션
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"],  # Android 클라이언트도 시도
+                    "skip": ["hls", "dash"],  # 문제가 될 수 있는 포맷 스킵
+                }
+            },
         }
+
+        # 환경변수로 쿠키 파일 경로 설정 가능
+        cookies_path = os.getenv("YOUTUBE_COOKIES_FILE")
+        if cookies_path and os.path.exists(cookies_path):
+            ydl_opts["cookiefile"] = cookies_path
+
+        # 프록시 설정 (필요시)
+        proxy_url = os.getenv("YOUTUBE_PROXY")
+        if proxy_url:
+            ydl_opts["proxy"] = proxy_url
+
         if progress_hook:
             ydl_opts["progress_hooks"] = [progress_hook]
+
+        # 랜덤 지연 추가 (1-3초)
+        time.sleep(random.uniform(1, 3))
+
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             return Path(ydl.prepare_filename(info)), info
