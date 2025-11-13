@@ -14,7 +14,7 @@ from ..auth.service import AuthService
 from ..auth.model import UserOut
 from ..voice_samples.service import VoiceSampleService
 from ..voice_samples.models import VoiceSampleUpdate
-from ..project.models import ProjectTargetUpdate, ProjectTargetStatus
+from ..project.models import ProjectTargetUpdate, ProjectTargetStatus, ProjectUpdate
 from ..project.service import ProjectService
 from ..assets.service import AssetService
 from ..assets.models import AssetCreate, AssetType
@@ -193,7 +193,7 @@ async def check_and_create_segments(
         # 기존 세그먼트가 있으면 ID 매핑만 생성
         for seg in existing_segments:
             segment_ids_map[seg.get("segment_index", 0)] = seg["_id"]
-       
+
     # 번역 세그먼트 생성 (타겟 언어별로 생성)
     if segments and target_lang:
         translations_to_create = []
@@ -257,7 +257,7 @@ async def check_and_create_segments(
                         {"$set": trans},
                         upsert=True,
                     )
-              
+
             except Exception as exc:
                 logger.error(f"Failed to create segment translations: {exc}")
 
@@ -284,7 +284,6 @@ async def process_md_completion(
             f"No target_lang in metadata or defaultTarget for project {project_id}"
         )
         return
-
 
     # 1. Asset 생성 (완성된 더빙 비디오)
     if result_key:
@@ -404,7 +403,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                                     VoiceSampleUpdate(**update_data),
                                     owner,
                                 )
-                         
 
                 except Exception as owner_exc:
                     logger.error(
@@ -463,6 +461,46 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             status=ProjectTargetStatus.PROCESSING, progress=10  # STT 시작 시 10%
         )
     elif stage == "asr_completed":  # stt 완료
+        # 원본 오디오, 발화 음성, 배경음, 오디오 제거 비디오 경로를 프로젝트에 저장
+        if metadata:
+            audio_key = metadata.get("audio_key")  # 원본 오디오 (mp4->wav)
+            vocals_key = metadata.get("vocals_key")  # 발화 음성 (vocals.wav)
+            background_key = metadata.get("background_key")  # 배경음
+            video_only_key = metadata.get("video_only_key")  # 오디오 제거 비디오
+
+            if audio_key or vocals_key or background_key or video_only_key:
+                update_data = {}
+
+                if audio_key:
+                    update_data["audio_source"] = audio_key  # 원본 오디오
+
+                if vocals_key:
+                    update_data["vocal_source"] = vocals_key  # 발화 음성
+
+                if background_key:
+                    update_data["background_audio_source"] = background_key
+
+                if video_only_key:
+                    update_data["video_only_source"] = (
+                        video_only_key  # 오디오 제거 비디오
+                    )
+
+                if update_data:
+                    try:
+                        await project_service.update_project(
+                            ProjectUpdate(project_id=project_id, **update_data)
+                        )
+                        logger.info(
+                            f"Updated project {project_id} with audio/video files: "
+                            f"audio_source={update_data.get('audio_source', 'N/A')}, "
+                            f"vocal_source={update_data.get('vocal_source', 'N/A')}, "
+                            f"video_only_source={update_data.get('video_only_source', 'N/A')}"
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            f"Failed to update project audio/video files: {exc}"
+                        )
+
         target_update = ProjectTargetUpdate(
             status=ProjectTargetStatus.PROCESSING, progress=20  # STT 완료 시 20%
         )
@@ -515,7 +553,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                 await project_service.update_targets_by_project_and_language(
                     project_id, language_code, target_update
                 )
-              
+
                 # SSE 이벤트 브로드캐스트
                 await dispatch_target_update(
                     project_id,
