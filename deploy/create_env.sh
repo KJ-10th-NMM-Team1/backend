@@ -20,10 +20,7 @@ SECRET_JSON=$(aws secretsmanager get-secret-value \
 echo "Creating .env file..."
 echo "$SECRET_JSON" | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]' > "$ENV_FILE"
 
-# 3. YouTube 쿠키 파일 생성 (YOUTUBE_COOKIE 키의 값을 추출)
-#    (jq -r는 여러 줄 텍스트를 올바르게 처리합니다.)
-echo "Creating YouTube cookie file..."
-echo "$SECRET_JSON" | jq -r '.YOUTUBE_COOKIE' > "$COOKIE_FILE"
+aws s3 cp s3://git-artifect/youtube_cookie/youtube_cookie.txt "$APP_DIR/cookies.txt"
 
 # 4. GCP SA 파일 생성 (GCP_SERVICE_ACCOUNT_JSON 키의 값을 추출)
 #    (jq -r는 여러 줄의 JSON 객체를 올바르게 처리합니다.)
