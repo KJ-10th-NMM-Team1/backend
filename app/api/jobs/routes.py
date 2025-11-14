@@ -466,9 +466,8 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             audio_key = metadata.get("audio_key")  # 원본 오디오 (mp4->wav)
             vocals_key = metadata.get("vocals_key")  # 발화 음성 (vocals.wav)
             background_key = metadata.get("background_key")  # 배경음
-            video_only_key = metadata.get("video_only_key")  # 오디오 제거 비디오
 
-            if audio_key or vocals_key or background_key or video_only_key:
+            if audio_key or vocals_key or background_key:
                 update_data = {}
 
                 if audio_key:
@@ -480,11 +479,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                 if background_key:
                     update_data["background_audio_source"] = background_key
 
-                if video_only_key:
-                    update_data["video_only_source"] = (
-                        video_only_key  # 오디오 제거 비디오
-                    )
-
                 if update_data:
                     try:
                         await project_service.update_project(
@@ -494,7 +488,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                             f"Updated project {project_id} with audio/video files: "
                             f"audio_source={update_data.get('audio_source', 'N/A')}, "
                             f"vocal_source={update_data.get('vocal_source', 'N/A')}, "
-                            f"video_only_source={update_data.get('video_only_source', 'N/A')}"
                         )
                     except Exception as exc:
                         logger.error(
