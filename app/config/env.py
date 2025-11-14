@@ -1,8 +1,13 @@
 import os
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+from pathlib import Path
 
 load_dotenv()
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GEMINI_MODEL_VERSION = os.getenv("GEMINI_MODEL_VERSION", "gemini-2.0-flash")
+
 _raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
 origins = [origin.strip() for origin in _raw_origins.split(",") if origin.strip()]
 SECRET_KEY = os.getenv("SECRET_KEY")
