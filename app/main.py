@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from app.middleware.middleware import LoggingMiddleware
 from app.config.env import origins as allowed_origins
@@ -27,8 +27,6 @@ app.include_router(api_router)
 
 
 # 4. 루트 엔드포인트 (서버 상태 확인용)
-@app.get("/", tags=["Status"])
-async def read_root(db: DbDep):
-    users = await db["users"].find().to_list()
-    print(users)
+@app.get("/", tags=["Status"], status_code=status.HTTP_200_OK)
+def read_root():
     return {"status": "API Gateway is running. Visit /docs for API documentation."}
