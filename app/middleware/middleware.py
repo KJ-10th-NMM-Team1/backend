@@ -15,12 +15,6 @@ logger.addHandler(console_handler)
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        client_ip = request.client.host
-        method = request.method
-        path = request.url.path
-        
-        logger.info(f"Request: {method} {path} from {client_ip}")
-
         start_time = time.time()
         
         # (중요) 실제 엔드포인트 실행
