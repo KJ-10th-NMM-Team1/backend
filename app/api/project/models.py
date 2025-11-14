@@ -116,7 +116,6 @@ class EditorPlaybackState(BaseModel):
     active_language: str
     playback_rate: float = 1.0
     video_source: str | None
-    video_only_source: str | None  # 오디오가 제거된 비디오 파일
     audio_source: str | None
 
 
