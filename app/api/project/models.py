@@ -45,7 +45,9 @@ class ProjectPublic(ProjectBase):
     thumbnail: ProjectThumbnail | None = None
     glosary_id: Optional[str] = None
     duration_seconds: Optional[int] = None
-    audio_source: str | None = None
+    audio_source: str | None = None  # 원본 영상에서 추출한 전체 오디오 (mp4->wav)
+    vocal_source: str | None = None  # 분리한 발화 음성 (vocals.wav)
+    background_audio_source: str | None = None
 
 
 class ProjectCreateResponse(BaseModel):
@@ -56,7 +58,9 @@ class ProjectUpdate(BaseModel):
     project_id: str
     status: str | None = None
     video_source: str | None = None
-    audio_source: str | None = None
+    audio_source: str | None = None  # 원본 영상에서 추출한 전체 오디오 (mp4->wav)
+    vocal_source: str | None = None  # 분리한 발화 음성 (vocals.wav)
+    background_audio_source: str | None = None
     thumbnail: ProjectThumbnail | None = None
     segment_assets_prefix: Optional[str] = None
     segments: Optional[List[Dict[str, Any]]] = None

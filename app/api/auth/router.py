@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi import Request
 from datetime import timedelta
-from .model import UserCreate, UserOut, UserLogin, GoogleLogin
+from .model import (
+    UserCreate,
+    UserOut,
+    UserLogin,
+    GoogleLogin,
+    ChangePasswordRequest,
+)
 from typing import Dict, Any
 from .service import AuthService, get_current_user_from_cookie
 from ...config.env import ACCESS_TOKEN_EXPIRE_MINUTES
@@ -150,6 +156,25 @@ async def logout(
     )
 
     return {"message": "Logout successful"}
+
+
+@auth_router.post("/change-password", response_model=Dict[str, str])
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: UserOut = Depends(get_current_user_from_cookie),
+    auth_service: AuthService = Depends(AuthService),
+) -> Dict[str, str]:
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from current password.",
+        )
+
+    await auth_service.change_password(
+        current_user.email, payload.current_password, payload.new_password
+    )
+
+    return {"message": "Password updated successfully"}
 
 
 @auth_router.post(

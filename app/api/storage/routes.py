@@ -106,6 +106,7 @@ async def register_source(payload: RegisterRequest, request: Request, db: DbDep)
                 "project_id": payload.project_id,
                 "source_url": payload.youtube_url,
             },
+            job_timeout='10m',
         )
     except RedisError as exc:
         raise HTTPException(

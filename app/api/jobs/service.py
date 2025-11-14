@@ -56,6 +56,7 @@ def _serialize_job(doc: dict[str, Any]) -> JobRead:
             "task": doc.get("task"),
             "task_payload": doc.get("task_payload"),
             "target_lang": doc.get("target_lang"),  # 타겟 언어 추가
+            "source_lang": doc.get("source_lang"),  # 원본 언어 추가
         }
     )
 
@@ -70,6 +71,10 @@ def _build_job_message(job: JobRead) -> dict[str, Any]:
     }
     if job.input_key:
         message["input_key"] = job.input_key
+
+    # 원본 언어 추가
+    if job.source_lang:
+        message["source_lang"] = job.source_lang
 
     # 타겟 언어가 있으면 메시지에 포함
     if job.target_lang:
@@ -246,6 +251,7 @@ async def create_job(
         "task": payload.task or "full_pipeline",
         "task_payload": payload.task_payload or None,
         "target_lang": payload.target_lang,  # 타겟 언어 저장
+        "source_lang": payload.source_lang,  # 원본 언어 저장
     }
 
     try:
@@ -457,6 +463,7 @@ async def start_jobs_for_targets(project: ProjectPublic, target_languages: list[
             input_key=project.video_source,
             callback_url=callback_url,
             target_lang=target_lang,  # 타겟 언어 추가
+            source_lang=project.source_language # 원본 언어 추가
         )
 
         try:
@@ -503,6 +510,7 @@ async def start_job(project: ProjectPublic, db: DbDep):
         input_key=project.video_source,
         callback_url=callback_url,
         task_payload=task_payload if task_payload else None,
+        source_lang=project.source_language # 원본 언어 추가
     )
     job = await create_job(db, job_payload, job_oid=job_oid)
 

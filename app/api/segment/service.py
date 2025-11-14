@@ -1,6 +1,7 @@
 """
 세그먼트 및 번역 관련 서비스
 """
+
 from typing import Optional, List
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -16,15 +17,14 @@ class SegmentService:
         self.translations_collection = db["segment_translations"]
 
     async def get_segments_by_project(
-        self,
-        project_id: str,
-        skip: int = 0,
-        limit: Optional[int] = None
+        self, project_id: str, skip: int = 0, limit: Optional[int] = None
     ) -> List[dict]:
         """프로젝트 ID로 세그먼트 목록 조회"""
         try:
             query = {"project_id": project_id}
-            cursor = self.segments_collection.find(query).sort("segment_index", 1).skip(skip)
+            cursor = (
+                self.segments_collection.find(query).sort("segment_index", 1).skip(skip)
+            )
 
             if limit:
                 cursor = cursor.limit(limit)
@@ -67,9 +67,7 @@ class SegmentService:
             raise
 
     async def get_translations_by_segment(
-        self,
-        segment_id: str,
-        language_code: Optional[str] = None
+        self, segment_id: str, language_code: Optional[str] = None
     ) -> List[dict]:
         """세그먼트 ID로 번역 목록 조회"""
         try:
@@ -95,7 +93,7 @@ class SegmentService:
         project_id: str,
         language_code: Optional[str] = None,
         skip: int = 0,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[dict]:
         """프로젝트의 모든 번역 조회 (세그먼트 정보와 함께)"""
         try:
@@ -122,13 +120,14 @@ class SegmentService:
                 translation["_id"] = str(translation["_id"])
                 # segment_index 추가
                 if translation["segment_id"] in seg_index_map:
-                    translation["segment_index"] = seg_index_map[translation["segment_id"]]
+                    translation["segment_index"] = seg_index_map[
+                        translation["segment_id"]
+                    ]
                 translations.append(translation)
 
             # segment_index로 정렬
             translations.sort(key=lambda x: x.get("segment_index", 0))
 
-          
             return translations
 
         except Exception as exc:
@@ -140,7 +139,7 @@ class SegmentService:
         project_id: str,
         language_code: Optional[str] = None,
         skip: int = 0,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[dict]:
         """프로젝트의 세그먼트와 번역을 함께 조회"""
         try:
@@ -150,15 +149,16 @@ class SegmentService:
             # 각 세그먼트에 대한 번역 조회 (segment_id는 문자열로)
             for segment in segments:
                 translations = await self.get_translations_by_segment(
-                    str(segment["_id"]),  # 문자열로 변환
-                    language_code
+                    str(segment["_id"]), language_code  # 문자열로 변환
                 )
                 segment["translations"] = translations
 
             return segments
 
         except Exception as exc:
-            logger.error(f"Failed to get segments with translations for project {project_id}: {exc}")
+            logger.error(
+                f"Failed to get segments with translations for project {project_id}: {exc}"
+            )
             raise
 
     async def get_translation_languages(self, project_id: str) -> List[str]:
@@ -171,21 +171,22 @@ class SegmentService:
 
             # distinct로 언어 코드 조회
             languages = await self.translations_collection.distinct(
-                "language_code",
-                {"segment_id": {"$in": segment_ids}}
+                "language_code", {"segment_id": {"$in": segment_ids}}
             )
 
             return languages
 
         except Exception as exc:
-            logger.error(f"Failed to get translation languages for project {project_id}: {exc}")
+            logger.error(
+                f"Failed to get translation languages for project {project_id}: {exc}"
+            )
             raise
 
     async def update_translation(
         self,
         translation_id: str,
         target_text: Optional[str] = None,
-        segment_audio_url: Optional[str] = None
+        segment_audio_url: Optional[str] = None,
     ) -> Optional[dict]:
         """번역 업데이트"""
         try:
@@ -200,7 +201,7 @@ class SegmentService:
             result = await self.translations_collection.find_one_and_update(
                 {"_id": ObjectId(translation_id)},
                 {"$set": update_data},
-                return_document=True
+                return_document=True,
             )
 
             if result:
@@ -210,4 +211,79 @@ class SegmentService:
 
         except Exception as exc:
             logger.error(f"Failed to update translation {translation_id}: {exc}")
+            raise
+
+    async def create_or_update_translation(
+        self,
+        segment_id: str,
+        language_code: str,
+        target_text: str,
+        project_id: Optional[str] = None,
+    ) -> dict:
+        """번역 생성 또는 업데이트 (upsert)"""
+        try:
+            from datetime import datetime
+            from bson.errors import InvalidId
+
+            # 기존 번역이 있는지 확인
+            existing = await self.translations_collection.find_one(
+                {"segment_id": segment_id, "language_code": language_code}
+            )
+
+            now = datetime.now()
+
+            # project_id를 ObjectId로 변환 (문자열인 경우)
+            project_oid = None
+            if project_id:
+                try:
+                    project_oid = (
+                        ObjectId(project_id)
+                        if isinstance(project_id, str)
+                        else project_id
+                    )
+                except (InvalidId, TypeError):
+                    logger.warning(
+                        f"Invalid project_id format: {project_id}, skipping project_id"
+                    )
+
+            if existing:
+                # 업데이트
+                update_data = {"target_text": target_text, "updated_at": now}
+                if project_oid:
+                    update_data["project_id"] = project_oid
+
+                result = await self.translations_collection.find_one_and_update(
+                    {"_id": existing["_id"]},
+                    {"$set": update_data},
+                    return_document=True,
+                )
+            else:
+                # 생성
+                doc = {
+                    "segment_id": segment_id,
+                    "language_code": language_code,
+                    "target_text": target_text,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+                if project_oid:
+                    doc["project_id"] = project_oid
+
+                result = await self.translations_collection.insert_one(doc)
+                result = await self.translations_collection.find_one(
+                    {"_id": result.inserted_id}
+                )
+
+            if not result:
+                raise ValueError(
+                    f"Failed to create or update translation for segment {segment_id}"
+                )
+
+            result["_id"] = str(result["_id"])
+            return result
+
+        except Exception as exc:
+            logger.error(
+                f"Failed to create or update translation for segment {segment_id}: {exc}"
+            )
             raise

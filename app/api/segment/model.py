@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Annotated
+from typing import Any, Dict, List, Annotated, Optional
 from pydantic import BaseModel, Field, BeforeValidator
 from bson import ObjectId
 
@@ -108,3 +108,9 @@ class SegmentRetranslateResponse(BaseModel):
     status: str
 
 
+class TranslateSegmentRequest(BaseModel):
+    """세그먼트 번역 요청 모델"""
+
+    target_lang: str
+    src_lang: Optional[str] = None
+    source_text: Optional[str] = None  # 프론트엔드에서 수정한 source_text
