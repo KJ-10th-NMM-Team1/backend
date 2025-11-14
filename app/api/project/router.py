@@ -182,7 +182,6 @@ async def get_project_editor(
         active_language=language_code,
         playback_rate=1.0,
         video_source=project.video_source,
-        video_only_source=project.video_only_source,
         audio_source=project.audio_source,
     )
 
