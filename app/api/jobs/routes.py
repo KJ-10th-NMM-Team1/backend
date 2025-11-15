@@ -10,6 +10,7 @@ from ..pipeline.models import PipelineUpdate, PipelineStatus
 from ..translate.service import suggestion_by_project
 from app.api.pipeline.router import project_channels
 from ..segment.segment_service import SegmentService
+from ..segment.service import SegmentService as SegmentTranslationService
 from ..auth.service import AuthService
 from ..auth.model import UserOut
 from ..voice_samples.service import VoiceSampleService
@@ -510,8 +511,161 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             status=ProjectTargetStatus.PROCESSING, progress=36  # TTS 시작 시 55%
         )
     elif stage == "tts_completed":  # TTS 완료
+        # speaker_voices를 default_speaker_voices 형식으로 변환하여 프로젝트에 저장
+        if metadata and metadata.get("speaker_voices") and language_code:
+            try:
+                speaker_voices = metadata.get("speaker_voices", {})
+                # 형식 변환: {speaker: {ref_wav_key, prompt_text}} -> {target_lang: {speaker: {ref_wav_key, prompt_text}}}
+                default_speaker_voices = {language_code: speaker_voices}
+
+                await project_service.update_project(
+                    ProjectUpdate(
+                        project_id=project_id,
+                        default_speaker_voices=default_speaker_voices,
+                    )
+                )
+                logger.info(
+                    f"Updated project {project_id} with default_speaker_voices for language {language_code}"
+                )
+            except Exception as exc:
+                logger.error(
+                    f"Failed to update default_speaker_voices for project {project_id}: {exc}"
+                )
+
         target_update = ProjectTargetUpdate(
             status=ProjectTargetStatus.COMPLETED, progress=70  # TTS 완료
+        )
+    elif stage == "segment_tts_completed":  # 세그먼트 TTS 재생성 완료
+        # TTS된 음성의 key를 segment_translations의 segment_audio_url에 업데이트
+
+        if metadata and metadata.get("segments") and language_code:
+            try:
+                from bson import ObjectId
+
+                segment_translation_service = SegmentTranslationService(db)
+
+                segments_result = metadata.get("segments", [])
+
+                # metadata에서 segment_id 가져오기 (task_payload에서 전달됨)
+                segment_id = metadata.get("segment_id")
+
+                if not segment_id:
+
+                    # 폴백: segments의 첫 번째 항목에서 index로 찾기
+                    if segments_result:
+                        seg_result = segments_result[0]
+                        segment_index = seg_result.get("index")
+
+                        if segment_index is not None:
+                            project_oid = (
+                                ObjectId(project_id)
+                                if isinstance(project_id, str)
+                                else project_id
+                            )
+                            segment_doc = await db["project_segments"].find_one(
+                                {
+                                    "project_id": project_oid,
+                                    "segment_index": segment_index,
+                                }
+                            )
+                            if segment_doc:
+                                segment_id = str(segment_doc["_id"])
+
+                if not segment_id:
+                    logger.error(
+                        f"❌ [segment_tts_completed] Cannot find segment_id from metadata or segments"
+                    )
+                else:
+                    # segment_id로 segment 확인
+                    try:
+                        segment_oid = ObjectId(segment_id)
+                    except Exception as exc:
+                        logger.error(
+                            f"❌ [segment_tts_completed] Invalid segment_id format: {segment_id}, error: {exc}"
+                        )
+                        segment_id = None
+
+                    if segment_id:
+                        segment_doc = await db["project_segments"].find_one(
+                            {"_id": segment_oid}
+                        )
+                        if not segment_doc:
+                            logger.warning(
+                                f"⚠️ [segment_tts_completed] Segment not found: {segment_id}"
+                            )
+                            segment_id = None
+                        else:
+                            logger.info(
+                                f"✅ [segment_tts_completed] Found segment: segment_id={segment_id}, segment_index={segment_doc.get('segment_index')}"
+                            )
+
+                # segments_result에서 audio_key 가져오기
+                if segment_id:
+                    for seg_result in segments_result:
+                        audio_key = seg_result.get("audio_key")
+
+                        if not audio_key:
+                            logger.warning(
+                                f"⚠️ [segment_tts_completed] No audio_key in segment result: {seg_result}"
+                            )
+                            continue
+
+                        logger.info(
+                            f"🔍 [segment_tts_completed] Processing segment: segment_id={segment_id}, audio_key={audio_key}"
+                        )
+
+                        # segment_translations에서 해당 segment_id와 language_code로 번역 찾기
+                        translation_doc = await db["segment_translations"].find_one(
+                            {"segment_id": segment_id, "language_code": language_code}
+                        )
+
+                        if translation_doc:
+                            # segment_audio_url 업데이트
+                            translation_id = str(translation_doc["_id"])
+                            # audio_key를 URL 형식으로 변환 (필요시)
+                            audio_url = (
+                                f"{audio_key}"
+                                if not audio_key.startswith("/")
+                                and not audio_key.startswith("http")
+                                else audio_key
+                            )
+
+                            logger.info(
+                                f"🔄 [segment_tts_completed] Updating translation {translation_id} with audio_url: {audio_url}"
+                            )
+
+                            await segment_translation_service.update_translation(
+                                translation_id=translation_id,
+                                segment_audio_url=audio_url,
+                            )
+                            logger.info(
+                                f"✅ [segment_tts_completed] Updated segment_audio_url for segment {segment_id}, translation {translation_id}: {audio_url}"
+                            )
+                        else:
+                            logger.warning(
+                                f"⚠️ [segment_tts_completed] Translation not found for segment {segment_id}, language {language_code}"
+                            )
+                            # 디버깅: 해당 segment_id로 모든 번역 조회
+                            all_translations = (
+                                await db["segment_translations"]
+                                .find({"segment_id": segment_id})
+                                .to_list(None)
+                            )
+                            logger.info(
+                                f"🔍 [segment_tts_completed] All translations for segment {segment_id}: {all_translations}"
+                            )
+
+                        # 첫 번째 audio_key만 처리 (단일 세그먼트이므로)
+                        break
+
+            except Exception as exc:
+                logger.error(
+                    f"❌ [segment_tts_completed] Failed to update segment_audio_url for project {project_id}: {exc}",
+                    exc_info=True,
+                )
+
+        target_update = ProjectTargetUpdate(
+            status=ProjectTargetStatus.COMPLETED, progress=70  # 세그먼트 TTS 완료
         )
     elif stage == "mux_started":  # 비디오 처리 시작
         target_update = ProjectTargetUpdate(

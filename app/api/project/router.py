@@ -17,7 +17,10 @@ from .models import (
     EditorPlaybackState,
     ProjectSegmentCreate,
     SegmentTranslationCreate,
+    SegmentTTSRegenerateRequest,
+    SegmentTTSRegenerateResponse,
 )
+from ..jobs.service import start_segments_tts_job
 
 # from app.api.auth.service import get_current_user_from_cookie
 
@@ -43,8 +46,11 @@ project_router = APIRouter(prefix="/projects", tags=["Projects"])
 )
 async def create_project_endpoint(
     payload: ProjectCreate,
+    current_user: UserOut = Depends(get_current_user_from_cookie),
     project_service: ProjectService = Depends(ProjectService),
 ) -> ProjectCreateResponse:
+    # 인증된 사용자의 ID를 사용 (payload의 owner_id 무시)
+    payload.owner_id = str(current_user.id)
     result = await project_service.create_project(payload)
     return ProjectCreateResponse.model_validate(result)
 
@@ -225,3 +231,81 @@ async def create_segment_translation(
         project_id, segment_id, payload
     )
     return {"translation_id": translation_id}
+
+
+@project_router.post(
+    "/{project_id}/segments/regenerate-tts",
+    response_model=SegmentTTSRegenerateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="세그먼트 TTS 재생성",
+)
+async def regenerate_segment_tts(
+    project_id: str,
+    payload: SegmentTTSRegenerateRequest,
+    db: DbDep,
+) -> SegmentTTSRegenerateResponse:
+    """
+    단일 세그먼트에 대해 TTS를 재생성합니다.
+
+    - **project_id**: 프로젝트 ID
+    - **segment_idx**: 세그먼트 인덱스
+    - **translated_text**: 번역된 텍스트 (TTS 생성에 사용)
+    - **start**: 세그먼트 시작 시간 (초)
+    - **end**: 세그먼트 종료 시간 (초)
+    - **target_lang**: 타겟 언어 코드
+    - **mod**: "fixed" (고정 길이) 또는 "dynamic" (동적 길이)
+    - **voice_sample_id**: voice_sample ID (선택사항, 있으면 해당 voice_sample 사용, 없으면 프로젝트의 default_speaker_voices 사용)
+    """
+    # segment_id로 segment 조회하여 segment_index 확인
+    from bson import ObjectId
+    from bson.errors import InvalidId
+
+    try:
+        segment_oid = ObjectId(payload.segment_id)
+    except InvalidId:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid segment_id: {payload.segment_id}",
+        )
+
+    segment_doc = await db["project_segments"].find_one({"_id": segment_oid})
+    if not segment_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Segment not found: {payload.segment_id}",
+        )
+
+    segment_index = segment_doc.get("segment_index")
+    if segment_index is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Segment {payload.segment_id} has no segment_index",
+        )
+
+    # 단일 세그먼트를 배열로 변환 (worker는 배열을 기대함)
+    segments_data = [
+        {
+            "segment_idx": segment_index,
+            "translated_text": payload.translated_text,
+            "start": payload.start,
+            "end": payload.end,
+        }
+    ]
+
+    job = await start_segments_tts_job(
+        db,
+        project_id=project_id,
+        target_lang=payload.target_lang,
+        mod=payload.mod,
+        segments=segments_data,
+        voice_sample_id=payload.voice_sample_id,
+        segment_id=payload.segment_id,  # segment_id 전달
+    )
+
+    return SegmentTTSRegenerateResponse(
+        job_id=job.job_id,
+        project_id=project_id,
+        segment_idx=segment_index,
+        target_lang=payload.target_lang,
+        mod=payload.mod,
+    )

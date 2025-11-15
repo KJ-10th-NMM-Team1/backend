@@ -82,7 +82,9 @@ def _build_job_message(job: JobRead) -> dict[str, Any]:
 
     payload = job.task_payload or {}
     if task == "segment_tts":
-        message["segment"] = payload
+        # segment_tts 작업의 경우 task_payload를 직접 메시지에 포함
+        if payload:
+            message.update(payload)
     elif payload:
         message.update(payload)
 
@@ -351,7 +353,7 @@ async def update_job_status(
         assets_prefix = metadata.get("segment_assets_prefix")
         if assets_prefix:
             project_updates["segment_assets_prefix"] = assets_prefix
-    
+
     # payload.status가 있으면 project의 최종 status를 덮어씀 (done, failed 등)
     if payload.status:
         project_updates.setdefault("status", payload.status)
@@ -436,7 +438,9 @@ async def enqueue_job(job: JobRead, voice_config: Optional[dict] = None) -> None
         raise SqsPublishError("Failed to publish job message to SQS") from exc
 
 
-async def start_jobs_for_targets(project: ProjectPublic, target_languages: list[str], db: DbDep):
+async def start_jobs_for_targets(
+    project: ProjectPublic, target_languages: list[str], db: DbDep
+):
     """타겟 언어별로 여러 job을 생성하고 큐에 추가"""
     callback_base = _resolve_callback_base()
     jobs_created = []
@@ -463,20 +467,24 @@ async def start_jobs_for_targets(project: ProjectPublic, target_languages: list[
             input_key=project.video_source,
             callback_url=callback_url,
             target_lang=target_lang,  # 타겟 언어 추가
-            source_lang=project.source_language # 원본 언어 추가
+            source_lang=project.source_language,  # 원본 언어 추가
         )
 
         try:
             job = await create_job(db, job_payload, job_oid=job_oid)
             await enqueue_job(job, voice_config=voice_config)
-            jobs_created.append({
-                "project_id": project.project_id,
-                "job_id": job.job_id,
-                "target_lang": target_lang,
-                "status": job.status,
-            })
+            jobs_created.append(
+                {
+                    "project_id": project.project_id,
+                    "job_id": job.job_id,
+                    "target_lang": target_lang,
+                    "status": job.status,
+                }
+            )
         except (SqsPublishError, Exception) as exc:
-            logger.error(f"Failed to create/enqueue job for language {target_lang}: {exc}")
+            logger.error(
+                f"Failed to create/enqueue job for language {target_lang}: {exc}"
+            )
             # 실패한 job은 failed로 마킹하지만 다른 언어는 계속 진행
             if isinstance(job_oid, ObjectId):
                 await mark_job_failed(
@@ -510,7 +518,7 @@ async def start_job(project: ProjectPublic, db: DbDep):
         input_key=project.video_source,
         callback_url=callback_url,
         task_payload=task_payload if task_payload else None,
-        source_lang=project.source_language # 원본 언어 추가
+        source_lang=project.source_language,  # 원본 언어 추가
     )
     job = await create_job(db, job_payload, job_oid=job_oid)
 
@@ -572,6 +580,167 @@ async def start_segment_tts_job(
             text=text,
         ),
     )
+    job = await create_job(db, payload, job_oid=job_oid)
+
+    try:
+        await enqueue_job(job)
+    except SqsPublishError as exc:
+        await mark_job_failed(
+            db,
+            job.job_id,
+            error="sqs_publish_failed",
+            message=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to enqueue job",
+        ) from exc
+
+    return job
+
+
+async def find_full_pipeline_job(
+    db: DbDep,
+    *,
+    project_id: str,
+    target_lang: str,
+) -> Optional[str]:
+    """프로젝트의 full_pipeline job_id를 찾습니다."""
+    query = {
+        "project_id": project_id,
+        "target_lang": target_lang,
+        "$or": [
+            {"task": "full_pipeline"},
+            {"task": None},
+            {"task": {"$exists": False}},
+        ],
+    }
+
+    # 최신 완료된 job을 우선 찾고, 없으면 최신 job 사용
+    job_doc = await db[JOB_COLLECTION].find_one(
+        query,
+        sort=[("created_at", -1)],
+    )
+
+    if job_doc:
+        return str(job_doc["_id"])
+    return None
+
+
+async def start_segments_tts_job(
+    db: DbDep,
+    *,
+    project_id: str,
+    target_lang: str,
+    mod: str,
+    segments: list[dict[str, Any]],
+    voice_sample_id: Optional[str] = None,
+    segment_id: Optional[str] = None,  # segment_id 추가 (콜백에서 사용)
+) -> JobRead:
+    """여러 세그먼트에 대한 TTS 재생성 작업을 큐에 추가합니다."""
+    # 프로젝트 정보 조회
+    project_doc = await db["projects"].find_one({"_id": ObjectId(project_id)})
+    if not project_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # full_pipeline 시 생성된 job_id 찾기
+    original_job_id = await find_full_pipeline_job(
+        db, project_id=project_id, target_lang=target_lang
+    )
+    if not original_job_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No full_pipeline job found for project {project_id} with target_lang {target_lang}",
+        )
+
+    callback_base = _resolve_callback_base()
+    # 새로운 job 생성 (콜백용)
+    job_oid = ObjectId()
+    callback_url = f"{callback_base.rstrip('/')}/api/jobs/{job_oid}/status"
+
+    # voice_sample_id 또는 default_speaker_voices에서 speaker_voices 매핑
+    resolved_speaker_voices = None
+
+    # 1. voice_sample_id가 있으면 해당 voice_sample 사용
+    if voice_sample_id:
+        try:
+            from ..voice_samples.service import VoiceSampleService
+
+            voice_sample_service = VoiceSampleService(db)
+            voice_sample = await voice_sample_service.get_voice_sample(
+                voice_sample_id, None
+            )
+
+            resolved_speaker_voices = {
+                "key": voice_sample.file_path_wav,
+            }
+            if voice_sample.prompt_text:
+                resolved_speaker_voices["text_prompt_value"] = voice_sample.prompt_text
+        except Exception as exc:
+            logger.warning(
+                f"Failed to load voice_sample {voice_sample_id}: {exc}. Falling back to default_speaker_voices."
+            )
+
+    # 2. voice_sample_id가 없거나 로드 실패 시 default_speaker_voices 사용
+    if not resolved_speaker_voices:
+        default_speaker_voices = project_doc.get("default_speaker_voices", {})
+        if target_lang in default_speaker_voices:
+            # default_speaker_voices[target_lang] = { speaker: { ref_wav_key, prompt_text } }
+            # -> speaker_voices = { key: ref_wav_key, ... }
+            lang_voices = default_speaker_voices[target_lang]
+            if lang_voices:
+                # 첫 번째 스피커의 ref_wav_key를 key로 사용
+                first_speaker = next(iter(lang_voices.values()))
+                if isinstance(first_speaker, dict) and "ref_wav_key" in first_speaker:
+                    resolved_speaker_voices = {
+                        "key": first_speaker["ref_wav_key"],
+                    }
+                    if "prompt_text" in first_speaker:
+                        resolved_speaker_voices["text_prompt_value"] = first_speaker[
+                            "prompt_text"
+                        ]
+
+    if not resolved_speaker_voices or not resolved_speaker_voices.get("key"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="speaker_voices.key is required. Either provide voice_sample_id or ensure default_speaker_voices is set for the target language.",
+        )
+
+    # segments 형식 변환: { segment_idx, translated_text, start, end } -> { text, s, e }
+    worker_segments = []
+    for seg in segments:
+        worker_segments.append(
+            {
+                "text": seg.get("translated_text", "").strip(),
+                "s": seg.get("start", 0.0),
+                "e": seg.get("end"),
+                "start": seg.get("start", 0.0),  # 호환성을 위해 둘 다 포함
+                "end": seg.get("end"),
+            }
+        )
+
+    # task_payload 구성 (original_job_id, segment_id 포함)
+    task_payload = {
+        "target_lang": target_lang,
+        "mod": mod,
+        "segments": worker_segments,
+        "speaker_voices": resolved_speaker_voices,
+        "original_job_id": original_job_id,  # full_pipeline job_id 전달
+        "segment_id": segment_id,  # segment_id 추가 (콜백에서 사용)
+    }
+
+    payload = JobCreate(
+        project_id=project_id,
+        input_key=project_doc.get("video_source"),
+        callback_url=callback_url,
+        task="segment_tts",
+        task_payload=task_payload,
+        target_lang=target_lang,
+    )
+
     job = await create_job(db, payload, job_oid=job_oid)
 
     try:
