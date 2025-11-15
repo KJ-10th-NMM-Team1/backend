@@ -1,6 +1,7 @@
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, Annotated
+from pydantic import BaseModel, Field, ConfigDict, BeforeValidator
+from bson import ObjectId
 
 PyObjectId = Annotated[
     str,  # <--- str에서 ObjectId로 변경하세요.
@@ -9,7 +10,7 @@ PyObjectId = Annotated[
 
 
 class SuggestionResponse(BaseModel):
-    id: str = Field(validation_alias="_id")
+    id: PyObjectId = Field(validation_alias="_id")
     segment_id: str
     original_text: Optional[str] = None
     translate_text: Optional[str] = None
@@ -19,15 +20,15 @@ class SuggestionResponse(BaseModel):
 
 
 class SuggestDelete(BaseModel):
-    segment_id: str
+    segment_id: PyObjectId
 
 
 class SuggestSave(BaseModel):
-    segment_id: str
+    segment_id: PyObjectId
 
 
 class SuggestionRequest(BaseModel):
-    segment_id: str
+    segment_id: PyObjectId
     original_text: Optional[str] = None
     translate_text: Optional[str] = None
     sugession_text: Optional[str] = None

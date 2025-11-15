@@ -6,6 +6,7 @@ import logging
 from app.config.env import VERTEX_PROJECT_ID, VERTEX_LOCATION, GEMINI_MODEL_VERSION, GOOGLE_APPLICATION_CREDENTIALS
 from ..deps import DbDep
 from .models import SuggestionRequest, SuggestionResponse
+import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
