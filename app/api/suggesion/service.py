@@ -21,14 +21,10 @@ class Model:
         self.languages_collection = db.get_collection("languages")
 
         try:
-            self.project_id = VERTEX_PROJECT_ID
-            self.location = VERTEX_LOCATION
-            self.model_name = GEMINI_MODEL_VERSION
-            
             # 서비스 계정 키 파일 경로
             sa_path = GOOGLE_APPLICATION_CREDENTIALS
 
-            if not all([self.project_id, self.location, self.model_name, sa_path]):
+            if not all([VERTEX_PROJECT_ID, VERTEX_LOCATION, GEMINI_MODEL_VERSION, sa_path]):
                 raise ValueError("필수 환경 변수(PROJECT_ID, LOCATION, MODEL, CREDENTIALS)가 설정되지 않았습니다.")
 
             # 2. 자격 증명(Credentials) 생성
@@ -38,8 +34,8 @@ class Model:
             )
             
             vertexai.init(
-                project=self.project_id,
-                location=self.location,
+                project=VERTEX_PROJECT_ID,
+                location=VERTEX_LOCATION,
                 credentials=credentials
             )
             

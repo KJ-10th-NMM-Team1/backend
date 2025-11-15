@@ -72,7 +72,7 @@ class GeminiTranslator:
             )
 
         # 모델/리전
-        self.model_name = _env_str("VERTEX_GEMINI_MODEL", "gemini-2.5-flash")
+        self.model_name = _env_str("GEMINI_MODEL_VERSION", "gemini-2.5-flash")
         self.location = _env_str("VERTEX_LOCATION", "us-central1")
         self.project_id = _env_str("VERTEX_PROJECT_ID")
 
