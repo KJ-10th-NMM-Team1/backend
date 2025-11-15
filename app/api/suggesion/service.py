@@ -1,31 +1,17 @@
-<<<<<<< HEAD
 import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.oauth2 import service_account
 from bson import ObjectId
 import logging
-from app.config.env import VERTEX_PROJECT_ID, VERTEX_LOCATION, GEMINI_MODEL_VERSION, GOOGLE_APPLICATION_CREDENTIALS
-from ..deps import DbDep
-from .models import SuggestionRequest, SuggestionResponse
-import datetime
-=======
-import logging
-from datetime import datetime
-from bson import ObjectId
-
-import vertexai
-from google.oauth2 import service_account
-from vertexai.generative_models import GenerativeModel
-
 from app.config.env import (
+    VERTEX_PROJECT_ID,
+    VERTEX_LOCATION,
     GEMINI_MODEL_VERSION,
     GOOGLE_APPLICATION_CREDENTIALS,
-    VERTEX_LOCATION,
-    VERTEX_PROJECT_ID,
 )
 from ..deps import DbDep
 from .models import SuggestionRequest, SuggestionResponse
->>>>>>> e1e9097 (fix: llm 모델 변견)
+import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,61 +26,32 @@ class Model:
 
         sa_path = GOOGLE_APPLICATION_CREDENTIALS
         try:
-<<<<<<< HEAD
             # 서비스 계정 키 파일 경로
             sa_path = GOOGLE_APPLICATION_CREDENTIALS
 
-            if not all([VERTEX_PROJECT_ID, VERTEX_LOCATION, GEMINI_MODEL_VERSION, sa_path]):
-                raise ValueError("필수 환경 변수(PROJECT_ID, LOCATION, MODEL, CREDENTIALS)가 설정되지 않았습니다.")
-
-            # 2. 자격 증명(Credentials) 생성
-            credentials = service_account.Credentials.from_service_account_file(
-                sa_path,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
-            
-            vertexai.init(
-                project=VERTEX_PROJECT_ID,
-                location=VERTEX_LOCATION,
-                credentials=credentials
-            )
-            
-            self.model = GenerativeModel(GEMINI_MODEL_VERSION)
-            
-        except Exception as e:
-            logger.error(f'오류 발생: {e}')
-            
-=======
-            self.project_id = VERTEX_PROJECT_ID
-            self.location = VERTEX_LOCATION
-            self.model_name = GEMINI_MODEL_VERSION
-            if not all([self.project_id, self.location, self.model_name, sa_path]):
+            if not all(
+                [VERTEX_PROJECT_ID, VERTEX_LOCATION, GEMINI_MODEL_VERSION, sa_path]
+            ):
                 raise ValueError(
                     "필수 환경 변수(PROJECT_ID, LOCATION, MODEL, CREDENTIALS)가 설정되지 않았습니다."
                 )
 
+            # 2. 자격 증명(Credentials) 생성
             credentials = service_account.Credentials.from_service_account_file(
-                sa_path,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+                sa_path, scopes=["https://www.googleapis.com/auth/cloud-platform"]
             )
 
             vertexai.init(
-                project=self.project_id,
-                location=self.location,
+                project=VERTEX_PROJECT_ID,
+                location=VERTEX_LOCATION,
                 credentials=credentials,
             )
-            self.model = GenerativeModel(self.model_name)
-            logger.info(
-                "Vertex AI 초기화 성공 (Project: %s, Model: %s)",
-                self.project_id,
-                self.model_name,
-            )
-        except Exception as exc:
-            self.model = None
-            logger.error("Vertex AI 초기화 오류: %s", exc)
-            logger.error("사용된 JSON 경로: %s", sa_path)
 
->>>>>>> e1e9097 (fix: llm 모델 변견)
+            self.model = GenerativeModel(GEMINI_MODEL_VERSION)
+
+        except Exception as e:
+            logger.error(f"오류 발생: {e}")
+
     async def prompt_text(self, segment_id: str, request_context: str) -> str:
         if not self.model:
             logger.error("Gemini 모델이 초기화되지 않았습니다.")
@@ -106,43 +63,31 @@ class Model:
         trans_segment = await self.segment_translations_collection.find_one(
             {"segment_id": segment_id}
         )
+        language_code = trans_segment.get("language_code")
+        language = await self.languages_collection.find_one(
+            {"language_code": language_code}
+        )
 
-        if not project_segment or not trans_segment:
+        if not project_segment or not trans_segment or not language:
             logger.error("세그먼트 정보를 찾을 수 없습니다: %s", segment_id)
             return ""
 
-        language_code = trans_segment.get("language_code")
-        languages_collection = await self.languages_collection.find_one(
-            {"language_code": language_code}
-        )
-        language_name = languages_collection.get("name_ko") if languages_collection else ""
+        language_name = language.get("name_ko", "")
+        origin_context = project_segment.get("source_text", "")
+        translate_context = trans_segment.get("target_text", "")
 
         prompt = f"""
-        [역활]: 당신은 전문 더빙 대본 편집자입니다.
-        [원문]: {project_segment.get('source_text', '')}
-        [번역문]: {trans_segment.get('target_text', '')}
-        [요청]: {request_context}
-        [규칙]: 1. 여러 가지 제안이나 설명을 절대 하지 마세요.
-               2. 수정된 최종 {language_name} 대본 하나만 응답으로 주세요.
-               3. 수정된 대본 외에 어떤 텍스트도 추가하지 마세요.
-               4. 응답의 앞이나 뒤에 따옴표("), 별표(*), 하이픈(-) 같은 서식용 문자를 절대 붙이지 마세요.
+        [Role]: You are a professional dubbing script editor.
+        [Original Text]: {origin_context}
+        [Translated Text]: {translate_context}
+        [Request]: {request_context}
+        [Rules]: 1. Absolutely do not provide multiple suggestions or explanations.
+                2. Respond with only the single, final, revised {language_name} script.
+                3. Do not add any text other than the revised script.
+                4. Never include formatting characters like quotation marks ("), asterisks (*), or hyphens (-) before or after your response.
         """
 
         try:
-<<<<<<< HEAD
-            # save_prompt_text
-            prompt = f"""
-            [Role]: You are a professional dubbing script editor.
-            [Original Text]: {origin_context}
-            [Translated Text]: {translate_context}
-            [Request]: {request_context}
-            [Rules]: 1. Absolutely do not provide multiple suggestions or explanations.
-                   2. Respond with only the single, final, revised {language_name} script.
-                   3. Do not add any text other than the revised script.
-                   4. Never include formatting characters like quotation marks ("), asterisks (*), or hyphens (-) before or after your response.
-            """
-=======
->>>>>>> e1e9097 (fix: llm 모델 변견)
             response = await self.model.generate_content_async(prompt)
         except Exception as exc:
             logger.error("Gemini API 호출 오류: %s", exc)
@@ -152,10 +97,6 @@ class Model:
             return ""
         return response.text.strip()
 
-<<<<<<< HEAD
-
-=======
->>>>>>> e1e9097 (fix: llm 모델 변견)
     async def save_prompt_text(self, segment_id: str) -> str:
         project_segment = await self.project_segemnts_collection.find_one(
             {"_id": ObjectId(segment_id)}
