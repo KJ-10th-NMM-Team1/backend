@@ -1,8 +1,9 @@
-import google.generativeai as genai
-from bson import ObjectId
+import vertexai
+from vertexai.generative_models import GenerativeModel
 from google.oauth2 import service_account
+from bson import ObjectId
 import logging
-from app.config.env import GEMINI_MODEL_VERSION, GOOGLE_API_KEY
+from app.config.env import VERTEX_PROJECT_ID, VERTEX_LOCATION, GEMINI_MODEL_VERSION, GOOGLE_APPLICATION_CREDENTIALS
 from ..deps import DbDep
 from .models import SuggestionRequest, SuggestionResponse
 import os
@@ -20,11 +21,26 @@ class Model:
         self.languages_collection = db.get_collection("languages")
 
         try:
-            genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-            if not GOOGLE_API_KEY:
-                raise ValueError("GOOGLE_API_KEY가 설정되지 않았습니다.")
-            self.model = genai.GenerativeModel(GEMINI_MODEL_VERSION)
+            # 서비스 계정 키 파일 경로
+            sa_path = GOOGLE_APPLICATION_CREDENTIALS
 
+            if not all([VERTEX_PROJECT_ID, VERTEX_LOCATION, GEMINI_MODEL_VERSION, sa_path]):
+                raise ValueError("필수 환경 변수(PROJECT_ID, LOCATION, MODEL, CREDENTIALS)가 설정되지 않았습니다.")
+
+            # 2. 자격 증명(Credentials) 생성
+            credentials = service_account.Credentials.from_service_account_file(
+                sa_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            
+            vertexai.init(
+                project=VERTEX_PROJECT_ID,
+                location=VERTEX_LOCATION,
+                credentials=credentials
+            )
+            
+            self.model = GenerativeModel(GEMINI_MODEL_VERSION)
+            
         except Exception as e:
             logger.error(f'오류 발생: {e}')
             
@@ -43,14 +59,14 @@ class Model:
         try:
             # save_prompt_text
             prompt = f"""
-            [역활]: 당신은 전문 더빙 대본 편집자입니다.
-            [원문]: {origin_context}
-            [번역문]: {translate_context}
-            [요청]: {request_context}
-            [규칙]: 1. 여러 가지 제안이나 설명을 절대 하지 마세요.
-                   2. 수정된 최종 {language_name} 대본 하나만 응답으로 주세요.
-                   3. 수정된 대본 외에 어떤 텍스트도 추가하지 마세요.
-                   4. 응답의 앞이나 뒤에 따옴표("), 별표(*), 하이픈(-) 같은 서식용 문자를 절대 붙이지 마세요.
+            [Role]: You are a professional dubbing script editor.
+            [Original Text]: {origin_context}
+            [Translated Text]: {translate_context}
+            [Request]: {request_context}
+            [Rules]: 1. Absolutely do not provide multiple suggestions or explanations.
+                   2. Respond with only the single, final, revised {language_name} script.
+                   3. Do not add any text other than the revised script.
+                   4. Never include formatting characters like quotation marks ("), asterisks (*), or hyphens (-) before or after your response.
             """
             response = await self.model.generate_content_async(prompt)
             
