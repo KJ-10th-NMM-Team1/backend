@@ -3,13 +3,17 @@ from enum import Enum
 from typing import Annotated, Optional
 
 from bson import ObjectId
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 
 PyObjectId = Annotated[
-    ObjectId,  # <--- str에서 ObjectId로 변경하세요.
-    BeforeValidator(lambda v: ObjectId(v) if not isinstance(v, ObjectId) else v),
+    str,
+    BeforeValidator(lambda v: str(v) if isinstance(v, ObjectId) else v),
 ]
+
+
+common_model_config = ConfigDict(populate_by_name=True)
+
 
 class SuggestionResponse(BaseModel):
     id: PyObjectId = Field(validation_alias="id")
@@ -18,27 +22,19 @@ class SuggestionResponse(BaseModel):
     translate_text: Optional[str] = None
     sugession_text: Optional[str] = None
 
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True  # PyObjectId 같은 커스텀 타입 허용
-        json_encoders = {ObjectId: str}  # ObjectId를 str으로 변환
+    model_config = common_model_config
 
 
 class SuggestDelete(BaseModel):
     segment_id: PyObjectId
 
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True  # PyObjectId 같은 커스텀 타입 허용
-        json_encoders = {ObjectId: str}  # ObjectId를 str으로 변환
+    model_config = common_model_config
+
 
 class SuggestSave(BaseModel):
     segment_id: PyObjectId
 
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True  # PyObjectId 같은 커스텀 타입 허용
-        json_encoders = {ObjectId: str}  # ObjectId를 str으로 변환
+    model_config = common_model_config
 
 
 class SuggestionRequest(BaseModel):
@@ -48,7 +44,4 @@ class SuggestionRequest(BaseModel):
     sugession_text: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True  # PyObjectId 같은 커스텀 타입 허용
-        json_encoders = {ObjectId: str}  # ObjectId를 str으로 변환
+    model_config = common_model_config
