@@ -687,13 +687,28 @@ async def start_segments_tts_job(
     # 2. voice_sample_id가 없거나 로드 실패 시 default_speaker_voices 사용
     if not resolved_speaker_voices:
         default_speaker_voices = project_doc.get("default_speaker_voices", {})
+        logger.info(
+            f"🔍 [start_segments_tts_job] Checking default_speaker_voices: "
+            f"target_lang={target_lang}, "
+            f"default_speaker_voices keys={list(default_speaker_voices.keys())}, "
+            f"default_speaker_voices={default_speaker_voices}"
+        )
+
         if target_lang in default_speaker_voices:
             # default_speaker_voices[target_lang] = { speaker: { ref_wav_key, prompt_text } }
             # -> speaker_voices = { key: ref_wav_key, ... }
             lang_voices = default_speaker_voices[target_lang]
+            logger.info(
+                f"🔍 [start_segments_tts_job] Found lang_voices for {target_lang}: {lang_voices}"
+            )
+
             if lang_voices:
                 # 첫 번째 스피커의 ref_wav_key를 key로 사용
                 first_speaker = next(iter(lang_voices.values()))
+                logger.info(
+                    f"🔍 [start_segments_tts_job] First speaker data: {first_speaker}"
+                )
+
                 if isinstance(first_speaker, dict) and "ref_wav_key" in first_speaker:
                     resolved_speaker_voices = {
                         "key": first_speaker["ref_wav_key"],
@@ -702,8 +717,30 @@ async def start_segments_tts_job(
                         resolved_speaker_voices["text_prompt_value"] = first_speaker[
                             "prompt_text"
                         ]
+                    logger.info(
+                        f"✅ [start_segments_tts_job] Resolved speaker_voices from default_speaker_voices: {resolved_speaker_voices}"
+                    )
+                else:
+                    logger.warning(
+                        f"⚠️ [start_segments_tts_job] First speaker data is not a dict or missing ref_wav_key: {first_speaker}"
+                    )
+            else:
+                logger.warning(
+                    f"⚠️ [start_segments_tts_job] lang_voices is empty for target_lang={target_lang}"
+                )
+        else:
+            logger.warning(
+                f"⚠️ [start_segments_tts_job] target_lang={target_lang} not found in default_speaker_voices. "
+                f"Available languages: {list(default_speaker_voices.keys())}"
+            )
 
     if not resolved_speaker_voices or not resolved_speaker_voices.get("key"):
+        logger.error(
+            f"❌ [start_segments_tts_job] speaker_voices.key is missing. "
+            f"project_id={project_id}, target_lang={target_lang}, "
+            f"voice_sample_id={voice_sample_id}, "
+            f"default_speaker_voices={project_doc.get('default_speaker_voices', {})}"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="speaker_voices.key is required. Either provide voice_sample_id or ensure default_speaker_voices is set for the target language.",

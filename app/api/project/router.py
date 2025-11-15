@@ -248,7 +248,7 @@ async def regenerate_segment_tts(
     단일 세그먼트에 대해 TTS를 재생성합니다.
 
     - **project_id**: 프로젝트 ID
-    - **segment_idx**: 세그먼트 인덱스
+    - **segment_id**: 세그먼트 ID (project_segments 컬렉션의 _id)
     - **translated_text**: 번역된 텍스트 (TTS 생성에 사용)
     - **start**: 세그먼트 시작 시간 (초)
     - **end**: 세그먼트 종료 시간 (초)
@@ -256,13 +256,27 @@ async def regenerate_segment_tts(
     - **mod**: "fixed" (고정 길이) 또는 "dynamic" (동적 길이)
     - **voice_sample_id**: voice_sample ID (선택사항, 있으면 해당 voice_sample 사용, 없으면 프로젝트의 default_speaker_voices 사용)
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    logger.info(
+        f"🔍 [regenerate_segment_tts] Received request: project_id={project_id}, payload={payload.model_dump()}"
+    )
+
     # segment_id로 segment 조회하여 segment_index 확인
     from bson import ObjectId
     from bson.errors import InvalidId
 
     try:
         segment_oid = ObjectId(payload.segment_id)
-    except InvalidId:
+        logger.info(
+            f"✅ [regenerate_segment_tts] Valid segment_id: {payload.segment_id}"
+        )
+    except InvalidId as exc:
+        logger.error(
+            f"❌ [regenerate_segment_tts] Invalid segment_id: {payload.segment_id}, error: {exc}"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid segment_id: {payload.segment_id}",

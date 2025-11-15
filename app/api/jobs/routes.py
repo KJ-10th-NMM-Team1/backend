@@ -638,9 +638,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                                 translation_id=translation_id,
                                 segment_audio_url=audio_url,
                             )
-                            logger.info(
-                                f"✅ [segment_tts_completed] Updated segment_audio_url for segment {segment_id}, translation {translation_id}: {audio_url}"
-                            )
+
                         else:
                             logger.warning(
                                 f"⚠️ [segment_tts_completed] Translation not found for segment {segment_id}, language {language_code}"
@@ -673,6 +671,51 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=71,  # 비디오 처리 시작 시 70%
         )
     elif stage == "done":  # 비디오 처리 완료
+        # speaker_refs 또는 speaker_voices가 있으면 저장 (tts_completed를 건너뛴 경우 대비)
+        if metadata and language_code:
+            speaker_voices = metadata.get("speaker_voices") or metadata.get(
+                "speaker_refs"
+            )
+            if speaker_voices:
+                try:
+                    from bson import ObjectId
+
+                    # 기존 default_speaker_voices를 가져와서 병합 (다른 언어 데이터 보존)
+                    project_oid = ObjectId(project_id)
+                    project_doc = await db["projects"].find_one({"_id": project_oid})
+                    existing_default_speaker_voices = (
+                        project_doc.get("default_speaker_voices", {})
+                        if project_doc
+                        else {}
+                    )
+
+                    # 새로운 언어 데이터 추가 (기존 데이터 유지)
+                    updated_default_speaker_voices = {
+                        **existing_default_speaker_voices,
+                        language_code: speaker_voices,
+                    }
+
+                    await project_service.update_project(
+                        ProjectUpdate(
+                            project_id=project_id,
+                            default_speaker_voices=updated_default_speaker_voices,
+                        )
+                    )
+
+                    # 저장 확인: 업데이트 후 다시 조회하여 확인
+                    verify_doc = await db["projects"].find_one({"_id": project_oid})
+                    saved_voices = (
+                        verify_doc.get("default_speaker_voices", {})
+                        if verify_doc
+                        else {}
+                    )
+
+                except Exception as exc:
+                    logger.error(
+                        f"❌ [done] Failed to update default_speaker_voices for project {project_id}: {exc}",
+                        exc_info=True,
+                    )
+
         # 새로운 처리 함수 호출: asset 생성 및 세그먼트 생성
         # result_key는 metadata 또는 result에서 가져옴
         final_result_key = metadata.get("result_key") or result.result_key
