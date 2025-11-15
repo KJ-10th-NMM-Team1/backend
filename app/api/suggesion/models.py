@@ -1,7 +1,11 @@
 from datetime import datetime
 from typing import Optional
-
 from pydantic import BaseModel, Field, ConfigDict
+
+PyObjectId = Annotated[
+    str,  # <--- str에서 ObjectId로 변경하세요.
+    BeforeValidator(lambda v: ObjectId(v) if not isinstance(v, ObjectId) else v),
+]
 
 
 class SuggestionResponse(BaseModel):
