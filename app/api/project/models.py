@@ -68,6 +68,9 @@ class ProjectUpdate(BaseModel):
     source_language: Optional[str] = None
     title: Optional[str] = None
     duration_seconds: Optional[int] = None
+    default_speaker_voices: Optional[Dict[str, Dict[str, Dict[str, str]]]] = (
+        None  # {target_lang: {speaker: {ref_wav_key, prompt_text}}}
+    )
 
 
 class ProjectTargetStatus(str, Enum):
@@ -154,3 +157,27 @@ class SegmentTranslationCreate(BaseModel):
     segment_audio_url: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class SegmentTTSRegenerateRequest(BaseModel):
+    """단일 세그먼트에 대한 TTS 재생성 요청"""
+
+    segment_id: str  # segment의 _id (project_segments 컬렉션의 _id)
+    translated_text: str
+    start: float
+    end: float
+    target_lang: str
+    mod: str = "fixed"  # "fixed" or "dynamic"
+    voice_sample_id: Optional[str] = (
+        None  # voice_sample의 ID (있으면 해당 voice_sample 사용, 없으면 default_speaker_voices 사용)
+    )
+
+
+class SegmentTTSRegenerateResponse(BaseModel):
+    """세그먼트 TTS 재생성 응답"""
+
+    job_id: str
+    project_id: str
+    segment_idx: int
+    target_lang: str
+    mod: str
