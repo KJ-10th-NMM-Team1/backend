@@ -13,8 +13,9 @@ from .models import (
     ProjectTarget,
     ProjectTargetUpdate,
 )
-
-# from ..pipeline.service import _create_default_pipeline
+import boto3
+from app.config.s3 import s3
+from app.config.env import settings
 
 
 class ProjectService:
@@ -23,6 +24,9 @@ class ProjectService:
         self.project_collection = db.get_collection("projects")
         self.segment_collection = db.get_collection("segments")
         self.target_collection = db.get_collection("project_targets")
+        self.s3 = s3
+        self.bucket = settings.S3_BUCKET
+
 
     async def get_project_by_id(self, project_id: str) -> ProjectPublic:
         doc = await self.project_collection.find_one({"_id": ObjectId(project_id)})
@@ -102,6 +106,18 @@ class ProjectService:
         return [ProjectOut.model_validate(doc) for doc in docs]
 
     async def delete_project(self, project_id: str) -> int:
+        prefix = f"projects/{project_id}/"
+        paginator = self.s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            objects = page.get("Contents", [])
+            if not objects:
+                continue
+            delete_payload = {
+                "Objects": [{"Key": obj["Key"]} for obj in objects],
+                "Quiet": True,
+            }
+            self.s3.delete_objects(Bucket=self.bucket, Delete=delete_payload)
+
         result = await self.project_collection.delete_one({"_id": project_id})
         return result.deleted_count
 
