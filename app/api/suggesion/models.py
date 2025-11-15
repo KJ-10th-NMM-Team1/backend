@@ -7,7 +7,7 @@ from pydantic import BaseModel, BeforeValidator, Field
 
 
 PyObjectId = Annotated[
-    ObjectId,  # <--- str에서 ObjectId로 변경하세요.
+    str,  # <--- str에서 ObjectId로 변경하세요.
     BeforeValidator(lambda v: ObjectId(v) if not isinstance(v, ObjectId) else v),
 ]
 
