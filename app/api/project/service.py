@@ -102,6 +102,8 @@ class ProjectService:
         return [ProjectOut.model_validate(doc) for doc in docs]
 
     async def delete_project(self, project_id: str) -> int:
+        'projects/6916d450f5d6d3aafbc33ebc/inputs/videos/dac9903c-9125-46cd-867b-bcd83f0b6a0b_SSYouTube.online_Michael Jordan On The Greatest Player Of All Time 🐐😱_480p.mp4'
+        
         result = await self.project_collection.delete_one({"_id": project_id})
         return result.deleted_count
 
