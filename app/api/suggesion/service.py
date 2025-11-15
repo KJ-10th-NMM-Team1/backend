@@ -63,14 +63,14 @@ class Model:
         try:
             # save_prompt_text
             prompt = f"""
-            [역활]: 당신은 전문 더빙 대본 편집자입니다.
-            [원문]: {origin_context}
-            [번역문]: {translate_context}
-            [요청]: {request_context}
-            [규칙]: 1. 여러 가지 제안이나 설명을 절대 하지 마세요.
-                   2. 수정된 최종 {language_name} 대본 하나만 응답으로 주세요.
-                   3. 수정된 대본 외에 어떤 텍스트도 추가하지 마세요.
-                   4. 응답의 앞이나 뒤에 따옴표("), 별표(*), 하이픈(-) 같은 서식용 문자를 절대 붙이지 마세요.
+            [Role]: You are a professional dubbing script editor.
+            [Original Text]: {origin_context}
+            [Translated Text]: {translate_context}
+            [Request]: {request_context}
+            [Rules]: 1. Absolutely do not provide multiple suggestions or explanations.
+                   2. Respond with only the single, final, revised {language_name} script.
+                   3. Do not add any text other than the revised script.
+                   4. Never include formatting characters like quotation marks ("), asterisks (*), or hyphens (-) before or after your response.
             """
             response = await self.model.generate_content_async(prompt)
             
