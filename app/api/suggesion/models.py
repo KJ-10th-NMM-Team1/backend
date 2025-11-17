@@ -29,6 +29,33 @@ class SuggestSave(BaseModel):
 
 class SuggestionRequest(BaseModel):
     segment_id: str
+
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True  # PyObjectId 같은 커스텀 타입 허용
+        json_encoders = {ObjectId: str}  # ObjectId를 str으로 변환
+
+
+class SuggestDelete(BaseModel):
+    segment_id: PyObjectId
+
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True  # PyObjectId 같은 커스텀 타입 허용
+        json_encoders = {ObjectId: str}  # ObjectId를 str으로 변환
+
+
+class SuggestSave(BaseModel):
+    segment_id: PyObjectId
+
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True  # PyObjectId 같은 커스텀 타입 허용
+        json_encoders = {ObjectId: str}  # ObjectId를 str으로 변환
+
+
+class SuggestionRequest(BaseModel):
+    segment_id: PyObjectId
     original_text: Optional[str] = None
     translate_text: Optional[str] = None
     sugession_text: Optional[str] = None
