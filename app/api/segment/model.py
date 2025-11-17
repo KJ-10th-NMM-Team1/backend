@@ -159,3 +159,31 @@ class MergeSegmentResponse(BaseModel):
     audio_url: str = Field(..., description="병합된 오디오 S3 URL")
     source_text: str = Field(..., description="병합된 원본 텍스트")
     target_text: str = Field(..., description="병합된 번역 텍스트")
+
+
+class SegmentUpdateData(BaseModel):
+    """개별 세그먼트 업데이트 데이터"""
+
+    id: str = Field(..., description="세그먼트 ID")
+    start: Optional[float] = Field(None, description="시작 시간 (초)")
+    end: Optional[float] = Field(None, description="종료 시간 (초)")
+    speaker_tag: Optional[str] = Field(None, description="화자 태그")
+    playbackRate: Optional[float] = Field(None, description="재생 속도")
+    source_text: Optional[str] = Field(None, description="원본 텍스트")
+    target_text: Optional[str] = Field(None, description="번역 텍스트")
+
+
+class UpdateSegmentsRequest(BaseModel):
+    """여러 세그먼트 일괄 업데이트 요청 모델"""
+
+    segments: List[SegmentUpdateData] = Field(
+        ..., min_length=1, description="업데이트할 세그먼트 목록"
+    )
+
+
+class UpdateSegmentsResponse(BaseModel):
+    """세그먼트 일괄 업데이트 응답 모델"""
+
+    success: bool = Field(..., description="성공 여부")
+    message: Optional[str] = Field(None, description="응답 메시지")
+    updated_count: int = Field(..., description="업데이트된 세그먼트 수")

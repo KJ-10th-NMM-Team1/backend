@@ -15,6 +15,8 @@ from .model import (
     RequestSegment,
     SegmentSplitResponseItem,
     MergeSegmentResponse,
+    SegmentUpdateData,
+    UpdateSegmentsResponse,
 )
 from ..project.models import (
     SegmentTranslationResponse,
@@ -697,3 +699,94 @@ class SegmentService:
                     logger.warning(
                         f"Failed to delete temp file {tmp_output_path}: {exc}"
                     )
+
+    async def update_segments_bulk(
+        self,
+        project_id: str,
+        language_code: str,
+        segments_data: list[SegmentUpdateData],
+    ) -> UpdateSegmentsResponse:
+        """
+        프로젝트의 여러 세그먼트를 일괄 업데이트합니다.
+
+        Args:
+            project_id: 프로젝트 ID
+            language_code: 타겟 언어 코드
+            segments_data: 업데이트할 세그먼트 데이터 목록
+
+        Returns:
+            업데이트 결과
+        """
+        # 1. 프로젝트 ID 검증
+        try:
+            project_oid = ObjectId(project_id)
+        except (InvalidId, TypeError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid project_id") from exc
+
+        # 2. 프로젝트 존재 확인
+        project = await self.collection.find_one({"_id": project_oid})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        now = datetime.now(timezone.utc)
+        updated_count = 0
+
+        # 3. 각 세그먼트 업데이트
+        for segment_data in segments_data:
+            try:
+                segment_oid = ObjectId(segment_data.id)
+            except (InvalidId, TypeError):
+                logger.warning(f"Invalid segment_id: {segment_data.id}, skipping")
+                continue
+
+            # 4. project_segments 컬렉션 업데이트할 필드 구성
+            segment_update_fields: Dict[str, Any] = {}
+
+            if segment_data.start is not None:
+                segment_update_fields["start"] = segment_data.start
+            if segment_data.end is not None:
+                segment_update_fields["end"] = segment_data.end
+            if segment_data.speaker_tag is not None:
+                segment_update_fields["speaker_tag"] = segment_data.speaker_tag
+            if segment_data.source_text is not None:
+                segment_update_fields["source_text"] = segment_data.source_text
+
+            # 5. project_segments 업데이트
+            if segment_update_fields:
+                segment_update_fields["updated_at"] = now
+                result = await self.segment_collection.update_one(
+                    {"_id": segment_oid, "project_id": project_oid},
+                    {"$set": segment_update_fields},
+                )
+                if result.matched_count > 0:
+                    updated_count += 1
+
+            # 6. segment_translations 컬렉션 업데이트할 필드 구성
+            translation_update_fields: Dict[str, Any] = {}
+
+            if segment_data.target_text is not None:
+                translation_update_fields["target_text"] = segment_data.target_text
+            if segment_data.playbackRate is not None:
+                translation_update_fields["playback_rate"] = segment_data.playbackRate
+
+            # 7. segment_translations 업데이트 (있으면 업데이트, 없으면 생성)
+            if translation_update_fields:
+                translation_update_fields["updated_at"] = now
+                await self.translation_collection.update_one(
+                    {"segment_id": segment_data.id, "language_code": language_code},
+                    {
+                        "$set": translation_update_fields,
+                        "$setOnInsert": {
+                            "segment_id": segment_data.id,
+                            "language_code": language_code,
+                            "created_at": now,
+                        },
+                    },
+                    upsert=True,
+                )
+
+        return UpdateSegmentsResponse(
+            success=True,
+            message=f"Successfully updated {updated_count} segments",
+            updated_count=updated_count,
+        )
