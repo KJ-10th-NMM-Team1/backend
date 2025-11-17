@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.oauth2 import service_account
@@ -11,6 +12,16 @@ from app.config.env import (
 )
 from ..deps import DbDep
 from .models import SuggestionRequest, SuggestionResponse
+=======
+import google.generativeai as genai
+from bson import ObjectId
+from google.oauth2 import service_account
+import logging
+from app.config.env import GEMINI_MODEL_VERSION, GOOGLE_API_KEY
+from ..deps import DbDep
+from .models import SuggestionRequest, SuggestionResponse
+import os
+>>>>>>> c3eceeb (feat: gemini 모델 사용)
 import datetime
 
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +35,7 @@ class Model:
         self.segment_translations_collection = db.get_collection("segment_translations")
         self.languages_collection = db.get_collection("languages")
 
+<<<<<<< HEAD
         sa_path = GOOGLE_APPLICATION_CREDENTIALS
         try:
             # 서비스 계정 키 파일 경로
@@ -93,11 +105,51 @@ class Model:
         except Exception as exc:
             logger.error("Gemini API 호출 오류: %s", exc)
             return ""
+=======
+        try:
+            genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+            if not GOOGLE_API_KEY:
+                raise ValueError("GOOGLE_API_KEY가 설정되지 않았습니다.")
+            self.model = genai.GenerativeModel(GEMINI_MODEL_VERSION)
+
+        except Exception as e:
+            logger.error(f'오류 발생: {e}')
+            
+    async def prompt_text(self, segment_id: str, request_context: str) -> str:
+        project_segment = await self.project_segemnts_collection.find_one({'_id': ObjectId(segment_id)})
+        trans_segmnet = await self.segment_translations_collection.find_one({'segment_id': segment_id})
+        
+        origin_context = project_segment['source_text']
+        translate_context = trans_segmnet['target_text']
+        language_code = trans_segmnet['language_code']
+
+        languages_collection = await self.languages_collection.find_one({'language_code': language_code})
+        language_name = languages_collection['name_ko']
+
+        response = None # 오류 발생 시 None을 반환하도록 초기화
+        try:
+            # save_prompt_text
+            prompt = f"""
+            [역활]: 당신은 전문 더빙 대본 편집자입니다.
+            [원문]: {origin_context}
+            [번역문]: {translate_context}
+            [요청]: {request_context}
+            [규칙]: 1. 여러 가지 제안이나 설명을 절대 하지 마세요.
+                   2. 수정된 최종 {language_name} 대본 하나만 응답으로 주세요.
+                   3. 수정된 대본 외에 어떤 텍스트도 추가하지 마세요.
+                   4. 응답의 앞이나 뒤에 따옴표("), 별표(*), 하이픈(-) 같은 서식용 문자를 절대 붙이지 마세요.
+            """
+            response = await self.model.generate_content_async(prompt)
+            
+        except Exception as e:
+            logger.error(f'Gemini API 호출 오류: {e}')
+>>>>>>> c3eceeb (feat: gemini 모델 사용)
 
         if not response:
             return ""
         return response.text.strip()
 
+<<<<<<< HEAD
     async def save_prompt_text(self, segment_id: str) -> str:
         project_segment = await self.project_segemnts_collection.find_one(
             {"_id": ObjectId(segment_id)}
@@ -112,10 +164,25 @@ class Model:
             "segment_id": segment_id,
             "original_text": project_segment.get("source_text", ""),
             "translate_text": trans_segment.get("target_text", ""),
+=======
+    
+    async def save_prompt_text(self, segment_id: str):
+        project_segment = await self.project_segemnts_collection.find_one({'_id': ObjectId(segment_id)})
+        trans_segmnet = await self.segment_translations_collection.find_one({'segment_id': segment_id})
+        
+        origin_context = project_segment['source_text']
+        translate_context = trans_segmnet['target_text']
+
+        document_to_save = {
+            "segment_id": segment_id,
+            "original_text": origin_context,
+            "translate_text": translate_context,
+>>>>>>> c3eceeb (feat: gemini 모델 사용)
             "sugession_text": None,
             "created_at": datetime.utcnow(),
         }
 
+<<<<<<< HEAD
         result = await self.suggesion_prompt_collection.insert_one(document_to_save)
         return str(result.inserted_id)
 
@@ -132,10 +199,30 @@ class Model:
             {"segment_id": segment_id}
         )
 
+=======
+        result = await self.suggesion_prompt_collection.insert_one(document_to_save.model_dump(by_alias=True))
+        return str(result.inserted_id)
+
+    async def get_suggession_by_id(self, segment_id: str):
+        doc = await self.suggesion_prompt_collection.find_one({
+            "$or": [
+                {"_id": ObjectId(segment_id)},
+                {"segment_id": segment_id},  # segment_id가 문자열이라면 ObjectId 변환은 빼세요
+            ]
+        })
+        if doc:
+            return SuggestionResponse(**doc) 
+        return None
+    
+    async def delete_suggession_by_id(self, segment_id: str):
+        return await self.suggesion_prompt_collection.delete_one({'segment_id': segment_id})
+    
+>>>>>>> c3eceeb (feat: gemini 모델 사용)
     async def update_suggession_by_id(self, request: SuggestionRequest):
         update_data = request.model_dump(exclude_unset=True)
 
         await self.suggesion_prompt_collection.update_one(
+<<<<<<< HEAD
             {"segment_id": request.segment_id},
             {"$set": update_data},
         )
@@ -144,3 +231,14 @@ class Model:
     async def get_suggession_list(self):
         docs = await self.suggesion_prompt_collection.find({}).to_list(length=None)
         return [SuggestionResponse(**doc) for doc in docs]
+=======
+            {'segment_id': request.segment_id}, 
+            {'$set': update_data }
+        )
+        return str(request.segment_id)
+    
+    async def get_suggession_list(self):
+        docs = await self.suggesion_prompt_collection.find({}).to_list(length=None) 
+        return [SuggestionResponse(**doc) for doc in docs]
+    
+>>>>>>> c3eceeb (feat: gemini 모델 사용)
