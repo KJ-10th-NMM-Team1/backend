@@ -16,11 +16,7 @@ class JobCreate(BaseModel):
     task: Optional[str] = None
     task_payload: Optional[dict[str, Any]] = None
     target_lang: Optional[str] = None  # 타겟 언어 코드 추가
-<<<<<<< HEAD
     source_lang: Optional[str] = None  # 원본 언어 코드 추가
-=======
-    source_lang: str = None  # 원본 언어 코드 추가
->>>>>>> a0f1a9d (feat: ai 제안 API 구현)
 
 
 class JobHistoryEntry(BaseModel):
@@ -44,11 +40,7 @@ class JobRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     history: list[JobHistoryEntry] = Field(default_factory=list)
-<<<<<<< HEAD
     source_lang: Optional[str] = None  # 원본 언어 코드 추가
-=======
-    source_lang: str = None  # 원본 언어 코드 추가
->>>>>>> a0f1a9d (feat: ai 제안 API 구현)
 
 
 class JobUpdateMetadata(BaseModel):
