@@ -93,8 +93,12 @@ google-cloud-aiplatform>=1.126.0
 <<<<<<< HEAD
 <<<<<<< HEAD
 google-generativeai>=0.3.0
+<<<<<<< HEAD
 =======
 >>>>>>> a0f1a9d (feat: ai 제안 API 구현)
 =======
 google-generativeai>=0.3.0
 >>>>>>> 9638742 (fix: google-generativeai requirement 추가)
+=======
+asyncio
+>>>>>>> f8ae718 (fix: AI 제안 속도 개선)
