@@ -144,11 +144,6 @@ class Model:
             {"segment_id": segment_id}
         )
 
-        result = await self.suggesion_prompt_collection.insert_one(
-            document_to_save.model_dump(by_alias=True)
-        )
-        return str(result.inserted_id)
-
     async def get_suggession_by_id(self, segment_id: str):
         doc = await self.suggesion_prompt_collection.find_one(
             {
