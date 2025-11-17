@@ -114,3 +114,46 @@ class TranslateSegmentRequest(BaseModel):
     target_lang: str
     src_lang: Optional[str] = None
     source_text: Optional[str] = None  # 프론트엔드에서 수정한 source_text
+
+
+class SegmentSplitRequest(BaseModel):
+    """세그먼트 분할 요청 모델"""
+
+    segment_id: str = Field(..., description="분할할 세그먼트의 ID")
+    language_code: str = Field(..., description="타겟 언어 코드 (예: ko, en, ja)")
+    split_time: float = Field(..., gt=0, description="분할 시점 (초 단위)")
+
+
+class SegmentSplitResponseItem(BaseModel):
+    """분할된 세그먼트 정보"""
+
+    id: str = Field(..., description="세그먼트 ID")
+    start: float = Field(..., description="시작 시간 (초)")
+    end: float = Field(..., description="종료 시간 (초)")
+    audio_url: str = Field(..., description="S3 오디오 파일 URL")
+
+
+class SegmentSplitResponse(BaseModel):
+    """세그먼트 분할 응답 모델"""
+
+    segments: List[SegmentSplitResponseItem] = Field(
+        ..., description="분할된 두 개의 세그먼트"
+    )
+
+
+class MergeSegmentsRequest(BaseModel):
+    """세그먼트 병합 요청 모델"""
+
+    segment_ids: List[str] = Field(
+        ..., min_length=2, description="병합할 세그먼트 ID 목록"
+    )
+    language_code: str = Field(..., description="타겟 언어 코드 (예: ko, en, ja)")
+
+
+class MergeSegmentResponse(BaseModel):
+    """세그먼트 병합 응답 모델"""
+
+    id: str = Field(..., description="병합된 세그먼트 ID")
+    start: float = Field(..., description="시작 시간 (초)")
+    end: float = Field(..., description="종료 시간 (초)")
+    audio_url: str = Field(..., description="병합된 오디오 S3 URL")
