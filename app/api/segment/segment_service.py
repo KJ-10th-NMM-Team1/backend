@@ -675,6 +675,8 @@ class SegmentService:
                 start=start_time,
                 end=end_time,
                 audio_url=merged_key,
+                source_text=merged_source_text,
+                target_text=merged_target_text,
             )
 
             return response

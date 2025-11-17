@@ -157,3 +157,5 @@ class MergeSegmentResponse(BaseModel):
     start: float = Field(..., description="시작 시간 (초)")
     end: float = Field(..., description="종료 시간 (초)")
     audio_url: str = Field(..., description="병합된 오디오 S3 URL")
+    source_text: str = Field(..., description="병합된 원본 텍스트")
+    target_text: str = Field(..., description="병합된 번역 텍스트")
