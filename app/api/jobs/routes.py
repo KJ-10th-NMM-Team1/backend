@@ -107,6 +107,11 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                             if prompt_text:
                                 update_data["prompt_text"] = prompt_text
 
+                            # processed_file_path_wav 업데이트 (전처리된 보이스 샘플)
+                            sample_key = metadata.get("sample_key")
+                            if sample_key:
+                                update_data["processed_file_path_wav"] = sample_key
+
                             if update_data:
                                 await service.update_voice_sample(
                                     voice_sample_id,

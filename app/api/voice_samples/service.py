@@ -223,7 +223,12 @@ class VoiceSampleService:
             sample_ids = [sample["_id"] for sample in samples]
             count_docs = await self.favorites_collection.aggregate(
                 [
-                    {"$match": {"type": "voice_sample", "sample_id": {"$in": sample_ids}}},
+                    {
+                        "$match": {
+                            "type": "voice_sample",
+                            "sample_id": {"$in": sample_ids},
+                        }
+                    },
                     {"$group": {"_id": "$sample_id", "count": {"$sum": 1}}},
                 ]
             ).to_list(length=None)
@@ -276,6 +281,8 @@ class VoiceSampleService:
             update_data["is_public"] = data.is_public
         if data.audio_sample_url is not None:
             update_data["audio_sample_url"] = data.audio_sample_url
+        if data.processed_file_path_wav is not None:
+            update_data["processed_file_path_wav"] = data.processed_file_path_wav
         if data.prompt_text is not None:
             update_data["prompt_text"] = data.prompt_text
         if data.country is not None:
