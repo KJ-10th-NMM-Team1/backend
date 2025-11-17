@@ -131,31 +131,6 @@ class Model:
             logger.error(f"Gemini API 또는 DB 호출 오류: {exc}", exc_info=True)
             return ""
 
-        if not response:
-            return ""
-        return response.text.strip()
-
-    async def save_prompt_text(self, segment_id: str) -> str:
-        project_segment = await self.project_segemnts_collection.find_one(
-            {"_id": ObjectId(segment_id)}
-        )
-        trans_segment = await self.segment_translations_collection.find_one(
-            {"segment_id": segment_id}
-        )
-        if not project_segment or not trans_segment:
-            raise ValueError("세그먼트 정보를 찾을 수 없습니다.")
-
-        document_to_save = {
-            "segment_id": segment_id,
-            "original_text": project_segment.get("source_text", ""),
-            "translate_text": trans_segment.get("target_text", ""),
-            "sugession_text": None,
-            "created_at": datetime.utcnow(),
-        }
-
-        result = await self.suggesion_prompt_collection.insert_one(document_to_save)
-        return str(result.inserted_id)
-
     async def get_suggession_by_id(self, segment_id: str):
         doc = await self.suggesion_prompt_collection.find_one(
             {"$or": [{"_id": ObjectId(segment_id)}, {"segment_id": segment_id}]}
