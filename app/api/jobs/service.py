@@ -675,8 +675,14 @@ async def start_segments_tts_job(
                 voice_sample_id, None
             )
 
+            # 전처리된 보이스 샘플 우선 사용, 없으면 원본 사용
+            voice_key = (
+                voice_sample.processed_file_path_wav
+                if voice_sample.processed_file_path_wav
+                else voice_sample.file_path_wav
+            )
             resolved_speaker_voices = {
-                "key": voice_sample.file_path_wav,
+                "key": voice_key,
             }
             if aws_s3_bucket:
                 resolved_speaker_voices["bucket"] = aws_s3_bucket
@@ -690,54 +696,43 @@ async def start_segments_tts_job(
     # 2. voice_sample_id가 없거나 로드 실패 시 default_speaker_voices 사용
     if not resolved_speaker_voices:
         default_speaker_voices = project_doc.get("default_speaker_voices", {})
-        logger.info(
-            f"🔍 [start_segments_tts_job] Checking default_speaker_voices: "
-            f"target_lang={target_lang}, "
-            f"default_speaker_voices keys={list(default_speaker_voices.keys())}, "
-            f"default_speaker_voices={default_speaker_voices}"
-        )
 
         if target_lang in default_speaker_voices:
-            # default_speaker_voices[target_lang] = { speaker: { ref_wav_key, prompt_text } }
-            # -> speaker_voices = { key: ref_wav_key, bucket(선택), text_prompt_value(선택), ... }
             lang_voices = default_speaker_voices[target_lang]
-            logger.info(
-                f"🔍 [start_segments_tts_job] Found lang_voices for {target_lang}: {lang_voices}"
-            )
 
             if lang_voices:
-                # 첫 번째 스피커의 ref_wav_key를 key로 사용
-                first_speaker = next(iter(lang_voices.values()))
-                logger.info(
-                    f"🔍 [start_segments_tts_job] First speaker data: {first_speaker}"
-                )
+                # segment_id가 있으면 해당 segment의 speaker_tag로 스피커 찾기
+                speaker_key = None
+                if segment_id:
+                    try:
+                        segment_oid = ObjectId(segment_id)
+                        segment_doc = await db["project_segments"].find_one(
+                            {"_id": segment_oid}
+                        )
+                        if segment_doc and segment_doc.get("speaker_tag"):
+                            speaker_key = segment_doc["speaker_tag"]
+                    except Exception:
+                        pass
 
-                if isinstance(first_speaker, dict) and "ref_wav_key" in first_speaker:
+                # speaker_key가 있으면 해당 스피커 사용, 없으면 첫 번째 스피커 사용
+                if speaker_key and speaker_key in lang_voices:
+                    selected_speaker = lang_voices[speaker_key]
+                else:
+                    selected_speaker = next(iter(lang_voices.values()))
+
+                if (
+                    isinstance(selected_speaker, dict)
+                    and "ref_wav_key" in selected_speaker
+                ):
                     resolved_speaker_voices = {
-                        "key": first_speaker["ref_wav_key"],
+                        "key": selected_speaker["ref_wav_key"],
                     }
                     if aws_s3_bucket:
                         resolved_speaker_voices["bucket"] = aws_s3_bucket
-                    if "prompt_text" in first_speaker:
-                        resolved_speaker_voices["text_prompt_value"] = first_speaker[
+                    if "prompt_text" in selected_speaker:
+                        resolved_speaker_voices["text_prompt_value"] = selected_speaker[
                             "prompt_text"
                         ]
-                    logger.info(
-                        f"✅ [start_segments_tts_job] Resolved speaker_voices from default_speaker_voices: {resolved_speaker_voices}"
-                    )
-                else:
-                    logger.warning(
-                        f"⚠️ [start_segments_tts_job] First speaker data is not a dict or missing ref_wav_key: {first_speaker}"
-                    )
-            else:
-                logger.warning(
-                    f"⚠️ [start_segments_tts_job] lang_voices is empty for target_lang={target_lang}"
-                )
-        else:
-            logger.warning(
-                f"⚠️ [start_segments_tts_job] target_lang={target_lang} not found in default_speaker_voices. "
-                f"Available languages: {list(default_speaker_voices.keys())}"
-            )
 
     if not resolved_speaker_voices or not resolved_speaker_voices.get("key"):
         logger.error(
@@ -798,5 +793,14 @@ async def start_segments_tts_job(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to enqueue job",
         ) from exc
+
+    # 큐잉된 job 데이터 출력
+    logger.info(
+        f"✅ [start_segments_tts_job] Job queued: job_id={job.job_id}, "
+        f"task={job.task}, target_lang={target_lang}, mod={mod}, "
+        f"segment_count={len(worker_segments)}, "
+        f"speaker_voices_key={resolved_speaker_voices.get('key')}, "
+        f"segment_id={segment_id}"
+    )
 
     return job

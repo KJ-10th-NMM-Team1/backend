@@ -15,6 +15,9 @@ class VoiceSampleCreate(BaseModel):
     description: Optional[str] = Field(None, description="샘플 설명")
     is_public: bool = Field(default=False, description="공개 여부")
     file_path_wav: str = Field(..., description="S3 파일 경로 (mp3 또는 wav)")
+    processed_file_path_wav: Optional[str] = Field(
+        None, description="전처리된 보이스 샘플 S3 경로 (Demucs로 보컬 분리된 파일)"
+    )
     audio_sample_url: Optional[str] = Field(None, description="미리듣기용 음성 URL")
     prompt_text: Optional[str] = Field(None, description="STT로 추출한 프롬프트 텍스트")
     country: Optional[str] = Field(default=None, description="국적(언어 코드)")
@@ -51,6 +54,7 @@ class VoiceSampleUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1)
     description: Optional[str] = None
     is_public: Optional[bool] = None
+    processed_file_path_wav: Optional[str] = None
     audio_sample_url: Optional[str] = None
     prompt_text: Optional[str] = None
     country: Optional[str] = None
@@ -68,12 +72,11 @@ class VoiceSampleOut(BaseModel):
     description: Optional[str] = None
     is_public: bool
     file_path_wav: str
+    processed_file_path_wav: Optional[str] = None
     audio_sample_url: Optional[str] = None
     created_at: datetime
     is_favorite: bool = Field(default=False, description="현재 사용자의 즐겨찾기 여부")
-    favorite_count: Optional[int] = Field(
-        default=None, description="전체 즐겨찾기 수"
-    )
+    favorite_count: Optional[int] = Field(default=None, description="전체 즐겨찾기 수")
     prompt_text: Optional[str] = None
     country: Optional[str] = None
     gender: Optional[str] = None
@@ -105,6 +108,8 @@ class TestSynthesisResponse(BaseModel):
 
     job_id: str = Field(..., description="작업 ID (polling용)")
     status: str = Field(default="queued", description="작업 상태")
+
+
 class VoiceSampleAvatarPrepareUpload(BaseModel):
     filename: str
     content_type: str
