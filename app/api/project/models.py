@@ -135,6 +135,7 @@ class SegmentTranslationResponse(BaseModel):
     source_text: str
     target_text: str | None = None
     segment_audio_url: str | None = None
+    playback_rate: float = Field(default=1.0, description="재생 속도")
 
 
 class EditorStateResponse(BaseModel):
