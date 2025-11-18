@@ -246,6 +246,7 @@ class SegmentService:
             # translation_data의 값이 있으면 우선, 없으면 project_segments 사용
             merged = {
                 "id": seg["_id"],
+                "translation_id": translation_data.get("_id"),  # segment_translations의 _id
                 **seg,  # project_segments 데이터 (기본값)
                 **translation_data,  # segment_translations 데이터 (편집값 우선)
                 "language_code": language_code,

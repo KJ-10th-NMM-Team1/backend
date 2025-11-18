@@ -125,8 +125,20 @@ class EditorPlaybackState(BaseModel):
     background_audio_source: str | None
 
 
+class IssueOut(BaseModel):
+    """이슈 정보"""
+    id: PyObjectId = Field(validation_alias="_id")
+    issue_type: str
+    severity: str
+    score: Optional[float] = None
+    diff: Optional[float] = None
+    details: Optional[Dict[str, Any]] = None
+    resolved: bool = False
+
+
 class SegmentTranslationResponse(BaseModel):
     id: PyObjectId
+    translation_id: Optional[PyObjectId] = Field(default=None, description="segment_translations의 _id")
     project_id: PyObjectId
     language_code: str
     speaker_tag: str | None = None
@@ -136,6 +148,7 @@ class SegmentTranslationResponse(BaseModel):
     target_text: str | None = None
     segment_audio_url: str | None = None
     playback_rate: float = Field(default=1.0, description="재생 속도")
+    issues: List["IssueOut"] = Field(default_factory=list, description="세그먼트 이슈 목록")
 
     @field_validator("start", "end", mode="before")
     @classmethod
