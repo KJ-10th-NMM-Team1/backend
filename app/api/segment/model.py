@@ -122,6 +122,8 @@ class SegmentSplitRequest(BaseModel):
     segment_id: str = Field(..., description="분할할 세그먼트의 ID")
     language_code: str = Field(..., description="타겟 언어 코드 (예: ko, en, ja)")
     split_time: float = Field(..., gt=0, description="분할 시점 (초 단위)")
+    current_start: float = Field(..., description="현재 세그먼트의 시작 시간 (초)")
+    current_end: float = Field(..., description="현재 세그먼트의 종료 시간 (초)")
 
 
 class SegmentSplitResponseItem(BaseModel):
@@ -141,11 +143,19 @@ class SegmentSplitResponse(BaseModel):
     )
 
 
+class MergeSegmentData(BaseModel):
+    """병합할 세그먼트 데이터"""
+
+    id: str = Field(..., description="세그먼트 ID")
+    start: float = Field(..., description="현재 세그먼트의 시작 시간 (초)")
+    end: float = Field(..., description="현재 세그먼트의 종료 시간 (초)")
+
+
 class MergeSegmentsRequest(BaseModel):
     """세그먼트 병합 요청 모델"""
 
-    segment_ids: List[str] = Field(
-        ..., min_length=2, description="병합할 세그먼트 ID 목록"
+    segments: List[MergeSegmentData] = Field(
+        ..., min_length=2, description="병합할 세그먼트 목록 (ID, start, end 포함)"
     )
     language_code: str = Field(..., description="타겟 언어 코드 (예: ko, en, ja)")
 

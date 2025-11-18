@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Annotated
 from enum import Enum
 from bson import ObjectId
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 PyObjectId = Annotated[
     str, BeforeValidator(lambda v: str(v) if isinstance(v, ObjectId) else v)
@@ -129,12 +129,27 @@ class SegmentTranslationResponse(BaseModel):
     id: PyObjectId
     project_id: PyObjectId
     language_code: str
-    speaker_tag: str
-    start: float = Field(..., ge=0)
-    end: float = Field(..., ge=0)
-    source_text: str
+    speaker_tag: str | None = None
+    start: float | None = Field(default=None)
+    end: float | None = Field(default=None)
+    source_text: str | None = None
     target_text: str | None = None
     segment_audio_url: str | None = None
+    playback_rate: float = Field(default=1.0, description="재생 속도")
+
+    @field_validator("start", "end", mode="before")
+    @classmethod
+    def clamp_negative_floats(cls, v: float | None) -> float | None:
+        """부동소수점 연산 오류로 인한 매우 작은 음수값을 0으로 변환"""
+        if v is None:
+            return v
+        # 매우 작은 음수값 (절댓값이 1e-10 미만)을 0으로 클램핑
+        if v < 0 and abs(v) < 1e-10:
+            return 0.0
+        # 음수값이지만 의미있는 크기라면 에러
+        if v < 0:
+            raise ValueError(f"Value must be greater than or equal to 0, got {v}")
+        return v
 
 
 class EditorStateResponse(BaseModel):
