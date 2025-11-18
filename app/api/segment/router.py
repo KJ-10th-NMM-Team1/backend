@@ -9,6 +9,7 @@ from .model import (
     SegmentRetranslateResponse,
     SegmentSplitRequest,
     SegmentSplitResponse,
+    MergeSegmentData,
     MergeSegmentsRequest,
     MergeSegmentResponse,
     UpdateSegmentsRequest,
@@ -112,6 +113,8 @@ async def split_segment(
     - **segment_id**: 분할할 세그먼트의 ID (project_segments)
     - **language_code**: 타겟 언어 코드 (예: ko, en, ja)
     - **split_time**: 분할 시점 (초 단위)
+    - **current_start**: 프론트엔드에서 편집 중인 현재 시작 시간 (초)
+    - **current_end**: 프론트엔드에서 편집 중인 현재 종료 시간 (초)
 
     Returns:
         분할된 두 개의 세그먼트 정보 (각각의 ID, 시작/종료 시간, 오디오 URL)
@@ -119,9 +122,14 @@ async def split_segment(
     Notes:
         - segment_id와 language_code로 segment_translations에서 오디오를 찾습니다
         - 해당 언어의 TTS 오디오를 분할합니다
+        - current_start, current_end를 기반으로 분할하여 편집 중인 값이 반영됩니다
     """
     segments = await service.split_segment(
-        payload.segment_id, payload.language_code, payload.split_time
+        payload.segment_id,
+        payload.language_code,
+        payload.split_time,
+        payload.current_start,
+        payload.current_end,
     )
     return SegmentSplitResponse(segments=segments)
 
@@ -134,7 +142,7 @@ async def merge_segments(
     """
     여러 세그먼트를 하나로 병합합니다.
 
-    - **segment_ids**: 병합할 세그먼트 ID 목록 (최소 2개 이상, project_segments)
+    - **segments**: 병합할 세그먼트 목록 (각각 id, start, end 포함, 최소 2개 이상)
     - **language_code**: 타겟 언어 코드 (예: ko, en, ja)
 
     Returns:
@@ -145,8 +153,11 @@ async def merge_segments(
         - 모든 세그먼트가 같은 프로젝트에 속해야 합니다
         - segment_ids와 language_code로 segment_translations에서 오디오를 찾습니다
         - 해당 언어의 TTS 오디오들을 병합합니다
+        - 프론트엔드에서 전달받은 start, end 값을 기반으로 병합하여 편집 중인 값이 반영됩니다
     """
-    return await service.merge_segments(payload.segment_ids, payload.language_code)
+    # Pydantic 모델을 dict 리스트로 변환
+    segments_data = [seg.model_dump() for seg in payload.segments]
+    return await service.merge_segments(segments_data, payload.language_code)
 
 
 @project_segment_router.put(

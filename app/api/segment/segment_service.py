@@ -298,7 +298,12 @@ class SegmentService:
         return str(result.inserted_id)
 
     async def split_segment(
-        self, segment_id: str, language_code: str, split_time: float
+        self,
+        segment_id: str,
+        language_code: str,
+        split_time: float,
+        current_start: float,
+        current_end: float,
     ) -> List[SegmentSplitResponseItem]:
         """
         세그먼트를 두 개로 분할합니다.
@@ -307,11 +312,13 @@ class SegmentService:
             segment_id: 분할할 세그먼트의 ID (project_segments)
             language_code: 타겟 언어 코드
             split_time: 분할 시점 (초 단위)
+            current_start: 프론트엔드에서 편집 중인 현재 시작 시간
+            current_end: 프론트엔드에서 편집 중인 현재 종료 시간
 
         Returns:
             분할된 두 개의 세그먼트 정보 리스트
         """
-        # 1. 세그먼트 조회 (시간 정보를 위해)
+        # 1. 세그먼트 조회
         try:
             segment_oid = ObjectId(segment_id)
         except (InvalidId, TypeError) as exc:
@@ -339,8 +346,9 @@ class SegmentService:
                 status_code=400, detail="Translation does not have audio file"
             )
 
-        start_time = float(segment.get("start", 0))
-        end_time = float(segment.get("end", 0))
+        # 프론트엔드에서 전달받은 현재 시간 정보 사용
+        start_time = current_start
+        end_time = current_end
         total_duration = end_time - start_time
 
         # 3. split_time 검증
@@ -488,25 +496,29 @@ class SegmentService:
                         logger.warning(f"Failed to delete temp file {tmp_path}: {exc}")
 
     async def merge_segments(
-        self, segment_ids: list[str], language_code: str
+        self, segments_data: list[dict], language_code: str
     ) -> MergeSegmentResponse:
         """
         여러 세그먼트를 하나로 병합합니다.
 
         Args:
-            segment_ids: 병합할 세그먼트 ID 목록 (project_segments)
+            segments_data: 병합할 세그먼트 목록 (각각 id, start, end 포함)
             language_code: 타겟 언어 코드
 
         Returns:
             병합된 세그먼트 정보
         """
-        # 1. 세그먼트 ID 검증
-        if len(segment_ids) < 2:
+        # 1. 세그먼트 데이터 검증
+        if len(segments_data) < 2:
             raise HTTPException(
                 status_code=400, detail="At least 2 segments are required for merging"
             )
 
-        # 2. 모든 세그먼트 조회 (시간 정보를 위해)
+        # 2. 프론트엔드에서 전달받은 데이터를 시작 시간 순으로 정렬
+        sorted_segments_data = sorted(segments_data, key=lambda s: s["start"])
+
+        # 3. 세그먼트 ID 목록 추출 및 ObjectId 변환
+        segment_ids = [s["id"] for s in sorted_segments_data]
         segment_oids = []
         for seg_id in segment_ids:
             try:
@@ -516,6 +528,7 @@ class SegmentService:
                     status_code=400, detail=f"Invalid segment_id: {seg_id}"
                 ) from exc
 
+        # 4. DB에서 세그먼트 조회 (검증 및 기타 정보를 위해)
         segments = await self.segment_collection.find(
             {"_id": {"$in": segment_oids}}
         ).to_list(None)
@@ -526,8 +539,9 @@ class SegmentService:
                 detail=f"Some segments not found. Expected {len(segment_ids)}, found {len(segments)}",
             )
 
-        # 3. 세그먼트를 시작 시간 순으로 정렬
-        segments.sort(key=lambda s: float(s.get("start", 0)))
+        # 5. 세그먼트를 ID 순서와 매칭 (정렬된 순서대로)
+        segment_id_to_segment = {str(seg["_id"]): seg for seg in segments}
+        sorted_segments = [segment_id_to_segment[seg_id] for seg_id in segment_ids]
 
         # 4. 각 세그먼트의 번역 정보 조회 (오디오 URL을 위해)
         translations = []
@@ -550,20 +564,20 @@ class SegmentService:
 
             translations.append(translation)
 
-        # 5. 세그먼트가 같은 프로젝트인지 확인
-        project_ids = {str(seg.get("project_id")) for seg in segments}
+        # 6. 세그먼트가 같은 프로젝트인지 확인
+        project_ids = {str(seg.get("project_id")) for seg in sorted_segments}
         if len(project_ids) > 1:
             raise HTTPException(
                 status_code=400,
                 detail="All segments must belong to the same project",
             )
 
-        # 6. 번역 정보를 세그먼트 순서대로 정렬
-        # segments는 이미 start 시간 순으로 정렬되어 있음
+        # 7. 번역 정보를 세그먼트 순서대로 정렬
+        # sorted_segments는 이미 start 시간 순으로 정렬되어 있음
         # translation도 같은 순서로 정렬
         segment_id_to_translation = {t["segment_id"]: t for t in translations}
         sorted_translations = []
-        for seg in segments:
+        for seg in sorted_segments:
             seg_id_str = str(seg["_id"])
             if seg_id_str in segment_id_to_translation:
                 sorted_translations.append(segment_id_to_translation[seg_id_str])
@@ -616,16 +630,17 @@ class SegmentService:
                 )
 
             # 13. DB 업데이트: 첫 번째 세그먼트를 병합된 세그먼트로 업데이트
-            start_time = float(segments[0].get("start", 0))
-            end_time = float(segments[-1].get("end", 0))
+            # 프론트엔드에서 전달받은 시간 정보 사용
+            start_time = sorted_segments_data[0]["start"]
+            end_time = sorted_segments_data[-1]["end"]
             now = datetime.now(timezone.utc)
 
-            first_segment = segments[0]
+            first_segment = sorted_segments[0]
             first_segment_id = str(first_segment["_id"])
 
             # 병합된 source_text 생성 (모든 세그먼트의 텍스트 결합)
             merged_source_text = " ".join(
-                [seg.get("source_text", "") for seg in segments]
+                [seg.get("source_text", "") for seg in sorted_segments]
             )
 
             # 첫 번째 세그먼트 업데이트
