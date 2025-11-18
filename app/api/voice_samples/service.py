@@ -3,7 +3,7 @@ from datetime import datetime
 from bson import ObjectId
 from bson.errors import InvalidId
 from pymongo.errors import PyMongoError
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Any
 
 from ..deps import DbDep
 from ..auth.model import UserOut
@@ -112,15 +112,15 @@ class VoiceSampleService:
     ) -> Tuple[List[VoiceSampleOut], int]:
         """음성 샘플 목록 조회"""
         # 필터 구성
-        filter_query = {}
+        conditions: list[dict[str, Any]] = []
 
         # 검색어 필터
-        search_or = None
         if q:
             search_or = [
                 {"name": {"$regex": q, "$options": "i"}},
                 {"description": {"$regex": q, "$options": "i"}},
             ]
+            conditions.append({"$or": search_or})
 
         # 내 샘플만 필터
         if my_samples_only:
@@ -131,7 +131,7 @@ class VoiceSampleService:
                 )
             try:
                 owner_oid = ObjectId(current_user.id)
-                filter_query["owner_id"] = owner_oid
+                conditions.append({"owner_id": owner_oid})
             except InvalidId:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id"
@@ -154,38 +154,22 @@ class VoiceSampleService:
                 ]
                 if not favorite_sample_ids:
                     return [], 0
-                filter_query["_id"] = {"$in": favorite_sample_ids}
+                conditions.append({"_id": {"$in": favorite_sample_ids}})
             except InvalidId:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id"
                 )
 
-        # 공개 샘플 또는 소유자 샘플만 조회
-        visibility_or = None
+        # 라이브러리 기본 탭: 공개 샘플만
         if not my_samples_only and not favorites_only:
-            if current_user:
-                try:
-                    owner_oid = ObjectId(current_user.id)
-                    visibility_or = [
-                        {"is_public": True},
-                        {"owner_id": owner_oid},
-                    ]
-                except InvalidId:
-                    pass
-            else:
-                filter_query["is_public"] = True
+            conditions.append({"is_public": True})
 
-        # 검색어와 공개/비공개 필터 병합
-        if search_or and visibility_or:
-            # $and를 사용하여 두 조건을 모두 만족하도록 함
-            filter_query["$and"] = [
-                {"$or": search_or},
-                {"$or": visibility_or},
-            ]
-        elif search_or:
-            filter_query["$or"] = search_or
-        elif visibility_or:
-            filter_query["$or"] = visibility_or
+        if len(conditions) > 1:
+            filter_query: dict[str, Any] = {"$and": conditions}
+        elif conditions:
+            filter_query = conditions[0]
+        else:
+            filter_query = {}
 
         # 총 개수 조회
         total = await self.collection.count_documents(filter_query)
