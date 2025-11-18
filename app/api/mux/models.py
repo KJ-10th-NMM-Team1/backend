@@ -10,6 +10,7 @@ class SegmentInfo(BaseModel):
     end: float  # 끝 시간 (초)
     audio_file: str  # 오디오 파일 S3 키 (예: "projects/xxx/interim/job_id/tts/segment_0000.wav")
     speaker: Optional[str] = None
+    playback_rate: Optional[float] = 1.0
 
 
 class MuxRequest(BaseModel):
