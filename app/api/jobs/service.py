@@ -57,6 +57,7 @@ def _serialize_job(doc: dict[str, Any]) -> JobRead:
             "task_payload": doc.get("task_payload"),
             "target_lang": doc.get("target_lang"),  # 타겟 언어 추가
             "source_lang": doc.get("source_lang"),  # 원본 언어 추가
+            "is_replace_voice_samples": doc.get("is_replace_voice_samples"), # 음성샘플 자동 추천 여부
         }
     )
 
@@ -79,6 +80,9 @@ def _build_job_message(job: JobRead) -> dict[str, Any]:
     # 타겟 언어가 있으면 메시지에 포함
     if job.target_lang:
         message["target_lang"] = job.target_lang
+
+    if job.is_replace_voice_samples:
+        message["is_replace_voice_samples"] = job.is_replace_voice_samples
 
     payload = job.task_payload or {}
     if task == "segment_tts":
@@ -254,6 +258,7 @@ async def create_job(
         "task_payload": payload.task_payload or None,
         "target_lang": payload.target_lang,  # 타겟 언어 저장
         "source_lang": payload.source_lang,  # 원본 언어 저장
+        "is_replace_voice_samples": payload.is_replace_voice_samples,   # 음성샘플 자동 추천 여부
     }
 
     try:

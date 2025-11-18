@@ -118,6 +118,7 @@ class ProjectService:
             status="uploading",
             created_at=now,
             speaker_count=payload.speakerCount,
+            is_replace_voice_samples=payload.replaceVoiceSamples,
         )
         doc = base.model_dump(exclude_none=True)
         result = await self.project_collection.insert_one(doc)

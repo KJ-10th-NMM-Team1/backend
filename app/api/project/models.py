@@ -18,6 +18,7 @@ class ProjectCreate(BaseModel):
     fileSize: Optional[int] = None
     speakerCount: int
     detectAutomatically: bool
+    replaceVoiceSamples: bool = True
     sourceLanguage: Optional[str] = None
     targetLanguages: List[str]
 
@@ -38,6 +39,7 @@ class ProjectBase(BaseModel):
     target_languages: List[str] = []
     created_at: datetime
     speaker_count: Optional[int] = None
+    is_replace_voice_samples: Optional[bool] = None
 
 
 class ProjectPublic(ProjectBase):

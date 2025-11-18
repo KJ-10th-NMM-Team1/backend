@@ -17,6 +17,8 @@ class JobCreate(BaseModel):
     task_payload: Optional[dict[str, Any]] = None
     target_lang: Optional[str] = None  # 타겟 언어 코드 추가
     source_lang: Optional[str] = None  # 원본 언어 코드 추가
+    is_replace_voice_samples: Optional[bool] = True # 음성샘플 자동 추천 여부
+
 
 
 class JobHistoryEntry(BaseModel):
@@ -41,6 +43,7 @@ class JobRead(BaseModel):
     updated_at: datetime
     history: list[JobHistoryEntry] = Field(default_factory=list)
     source_lang: Optional[str] = None  # 원본 언어 코드 추가
+    is_replace_voice_samples: Optional[bool] = True # 음성샘플 자동 추천 여부
 
 
 class JobUpdateMetadata(BaseModel):
@@ -71,6 +74,7 @@ class JobUpdateMetadata(BaseModel):
     segment_assets_prefix: Optional[str] = None
     segments: Optional[list[dict[str, Any]]] = None
     segment: Optional[dict[str, Any]] = None
+    is_replace_voice_samples: Optional[bool] = True # 음성샘플 자동 추천 여부
 
 
 class JobUpdateStatus(BaseModel):
