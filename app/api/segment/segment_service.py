@@ -434,6 +434,7 @@ class SegmentService:
                 {"segment_id": segment_id, "language_code": language_code},
                 {
                     "$set": {
+                        "end": start_time + split_time,
                         "segment_audio_url": part1_key,
                         "updated_at": now,
                     }
@@ -461,6 +462,8 @@ class SegmentService:
             new_translation_doc = {
                 "segment_id": new_segment_id,
                 "language_code": language_code,
+                "start": start_time + split_time,
+                "end": end_time,
                 "target_text": translation.get("target_text", ""),
                 "segment_audio_url": part2_key,
                 "created_at": now,
@@ -666,6 +669,8 @@ class SegmentService:
                 {"segment_id": first_segment_id, "language_code": language_code},
                 {
                     "$set": {
+                        "start": start_time,
+                        "end": end_time,
                         "target_text": merged_target_text,
                         "segment_audio_url": merged_key,
                         "updated_at": now,
