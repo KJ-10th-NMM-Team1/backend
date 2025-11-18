@@ -249,28 +249,55 @@ def media_redirect(key: str):
 
 
 @upload_router.get("/{project_id}/events")
-async def stream_events(project_id: str):
+async def stream_events(project_id: str, request: Request):
     redis = get_redis()
     pubsub = redis.pubsub()
     channel = f"uploads:{project_id}"
     pubsub.subscribe(channel)
+    logger.info(f"New SSE connection for uploads:{project_id}")
 
     async def event_stream():
         loop = asyncio.get_running_loop()
+        heartbeat_counter = 0
         try:
             while True:
-                message = await loop.run_in_executor(None, pubsub.get_message, 1.0)
+                # 클라이언트 연결 해제 확인
+                if await request.is_disconnected():
+                    logger.info(f"Client disconnected from storage events for project {project_id}")
+                    break
+
+                # 타임아웃을 줄여서 더 자주 연결 상태 체크 (1초 -> 0.5초)
+                message = await loop.run_in_executor(None, pubsub.get_message, 0.5)
+
                 if not message or message["type"] != "message":
+                    # 메시지가 없을 때 하트비트 체크 (30초마다)
+                    heartbeat_counter += 1
+                    if heartbeat_counter >= 60:  # 0.5초 * 60 = 30초
+                        yield {"event": "heartbeat", "data": '{"timestamp": "' + str(asyncio.get_event_loop().time()) + '"}'}
+                        heartbeat_counter = 0
                     await asyncio.sleep(0.1)
                     continue
+
+                # 메시지가 있으면 하트비트 카운터 리셋
+                heartbeat_counter = 0
                 data = message["data"]
                 if isinstance(data, bytes):
                     data = data.decode()
 
                 logger.info(f"event stream: {data}")
                 yield {"event": "progress", "data": data}
+
+        except asyncio.CancelledError:
+            logger.info(f"Storage events stream cancelled for project {project_id}")
+            raise
+        except Exception as e:
+            logger.error(f"Error in storage events stream for project {project_id}: {e}")
         finally:
-            pubsub.unsubscribe(channel)
-            pubsub.close()
+            try:
+                pubsub.unsubscribe(channel)
+                pubsub.close()
+                logger.info(f"Cleaned up Redis pubsub connection for project {project_id}")
+            except Exception as e:
+                logger.error(f"Error cleaning up pubsub for project {project_id}: {e}")
 
     return EventSourceResponse(event_stream())
