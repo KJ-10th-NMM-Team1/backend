@@ -239,10 +239,15 @@ class SegmentService:
         result = []
         for seg in segments:
             segment_id_str = str(seg["_id"])  # 문자열로 변환
+            translation_data = translation_map.get(segment_id_str, {})
+
+            # segment_translations의 편집된 값을 우선 사용하도록 순서 설정
+            # seg(project_segments)를 먼저, 그 다음 translation_data를 병합하여
+            # translation_data의 값이 있으면 우선, 없으면 project_segments 사용
             merged = {
                 "id": seg["_id"],
-                **seg,
-                **translation_map.get(segment_id_str, {}),  # 문자열 키로 조회
+                **seg,  # project_segments 데이터 (기본값)
+                **translation_data,  # segment_translations 데이터 (편집값 우선)
                 "language_code": language_code,
             }
             result.append(SegmentTranslationResponse(**merged))
@@ -739,31 +744,41 @@ class SegmentService:
                 logger.warning(f"Invalid segment_id: {segment_data.id}, skipping")
                 continue
 
+            # 이 세그먼트가 실제로 수정되었는지 추적
+            segment_modified = False
+
             # 4. project_segments 컬렉션 업데이트할 필드 구성
+            # 언어 독립적인 데이터만 저장
             segment_update_fields: Dict[str, Any] = {}
 
-            if segment_data.start is not None:
-                segment_update_fields["start"] = segment_data.start
-            if segment_data.end is not None:
-                segment_update_fields["end"] = segment_data.end
-            if segment_data.speaker_tag is not None:
-                segment_update_fields["speaker_tag"] = segment_data.speaker_tag
             if segment_data.source_text is not None:
                 segment_update_fields["source_text"] = segment_data.source_text
 
             # 5. project_segments 업데이트
             if segment_update_fields:
-                segment_update_fields["updated_at"] = now
+                # updated_at 없이 먼저 업데이트하여 실제 변경 여부 확인
                 result = await self.segment_collection.update_one(
-                    {"_id": segment_oid, "project_id": project_oid},
+                    {"_id": segment_oid},
                     {"$set": segment_update_fields},
                 )
-                if result.matched_count > 0:
-                    updated_count += 1
+                # 실제로 수정된 경우만 updated_at 업데이트
+                if result.modified_count > 0:
+                    await self.segment_collection.update_one(
+                        {"_id": segment_oid},
+                        {"$currentDate": {"updated_at": True}},
+                    )
+                    segment_modified = True
 
             # 6. segment_translations 컬렉션 업데이트할 필드 구성
+            # 타겟 언어별로 편집되는 데이터 저장
             translation_update_fields: Dict[str, Any] = {}
 
+            if segment_data.speaker_tag is not None:
+                translation_update_fields["speaker_tag"] = segment_data.speaker_tag
+            if segment_data.start is not None:
+                translation_update_fields["start"] = segment_data.start
+            if segment_data.end is not None:
+                translation_update_fields["end"] = segment_data.end
             if segment_data.target_text is not None:
                 translation_update_fields["target_text"] = segment_data.target_text
             if segment_data.playbackRate is not None:
@@ -771,8 +786,8 @@ class SegmentService:
 
             # 7. segment_translations 업데이트 (있으면 업데이트, 없으면 생성)
             if translation_update_fields:
-                translation_update_fields["updated_at"] = now
-                await self.translation_collection.update_one(
+                # updated_at 없이 먼저 업데이트하여 실제 변경 여부 확인
+                result = await self.translation_collection.update_one(
                     {"segment_id": segment_data.id, "language_code": language_code},
                     {
                         "$set": translation_update_fields,
@@ -784,6 +799,17 @@ class SegmentService:
                     },
                     upsert=True,
                 )
+                # 실제로 수정되었거나 새로 생성된 경우 updated_at 업데이트
+                if result.modified_count > 0 or result.upserted_id is not None:
+                    await self.translation_collection.update_one(
+                        {"segment_id": segment_data.id, "language_code": language_code},
+                        {"$currentDate": {"updated_at": True}},
+                    )
+                    segment_modified = True
+
+            # 세그먼트당 한 번만 카운트 (두 컬렉션 중 하나라도 수정되었으면)
+            if segment_modified:
+                updated_count += 1
 
         return UpdateSegmentsResponse(
             success=True,
