@@ -43,6 +43,74 @@ def upload_to_s3(bucket: str, key: str, local_path: Path) -> bool:
         return False
 
 
+def apply_playback_rate(
+    audio_path: Path, playback_rate: float, output_path: Path
+) -> Path:
+    """
+    FFmpeg의 atempo 필터를 사용하여 재생 속도 변경 (피치 유지)
+
+    Args:
+        audio_path: 입력 오디오 파일 경로
+        playback_rate: 재생 속도 배율 (1.0 = 정상 속도, 1.5 = 1.5배 빠름)
+        output_path: 출력 오디오 파일 경로
+
+    Returns:
+        출력 파일 경로 (playback_rate가 1.0이면 입력 파일 경로 반환)
+    """
+    if abs(playback_rate - 1.0) < 0.01:
+        # 1.0이면 변환 불필요
+        return audio_path
+
+    if playback_rate <= 0:
+        raise ValueError("playback_rate는 0보다 커야 합니다.")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # atempo는 0.5 ~ 2.0 범위만 지원하므로 여러 번 적용 필요
+    tempo_filters = []
+    rate = playback_rate
+
+    # 2.0보다 크면 여러 번 나눠서 적용
+    while rate > 2.0:
+        tempo_filters.append("atempo=2.0")
+        rate /= 2.0
+
+    # 0.5보다 작으면 여러 번 곱해서 적용
+    while rate < 0.5:
+        tempo_filters.append("atempo=0.5")
+        rate *= 2.0
+
+    # 남은 비율 적용 (0.5 ~ 2.0 범위)
+    if abs(rate - 1.0) >= 0.01:
+        # 소수점 3자리까지 정밀도
+        tempo_filters.append(f"atempo={rate:.3f}")
+
+    if not tempo_filters:
+        # 변환이 필요 없으면 원본 반환
+        return audio_path
+
+    # 필터 체인 생성
+    filter_chain = ",".join(tempo_filters)
+
+    cmd = [
+        "ffmpeg",
+        "-y",  # 덮어쓰기
+        "-i",
+        str(audio_path),
+        "-af",  # 오디오 필터
+        filter_chain,
+        str(output_path),
+    ]
+
+    logger.info(
+        f"Applying playback rate {playback_rate} to {audio_path} using filter: {filter_chain}"
+    )
+    subprocess.run(cmd, check=True, timeout=300)  # 5분 타임아웃
+    logger.info(f"Successfully applied playback rate to {output_path}")
+
+    return output_path
+
+
 def mux_audio_video(
     video_path: Path,
     audio_path: Path,
@@ -115,13 +183,29 @@ def mux_with_segments(
     voice_mix = AudioSegment.silent(duration=total_duration_ms)
 
     # 메타데이터를 기반으로 음성 구간을 정확한 위치에 오버레이
-    for segment in segments:
+    for i, segment in enumerate(segments):
         audio_file_path = Path(segment["audio_file"])
         if not audio_file_path.is_file():
             logger.warning(f"Audio file not found, skipping: {audio_file_path}")
             continue
 
-        segment_audio = AudioSegment.from_wav(str(audio_file_path))
+        # playbackRate 적용
+        playback_rate = float(segment.get("playback_rate", 1.0))
+        if abs(playback_rate - 1.0) >= 0.01:
+            # playbackRate가 1.0이 아니면 FFmpeg로 변환
+            temp_speed_path = audio_file_path.parent / f"segment_{i}_speed.wav"
+            try:
+                apply_playback_rate(audio_file_path, playback_rate, temp_speed_path)
+                segment_audio = AudioSegment.from_wav(str(temp_speed_path))
+            except Exception as e:
+                logger.error(
+                    f"Failed to apply playback rate {playback_rate} to {audio_file_path}: {e}"
+                )
+                # 실패 시 원본 사용
+                segment_audio = AudioSegment.from_wav(str(audio_file_path))
+        else:
+            # playbackRate가 1.0이면 변환 없이 사용
+            segment_audio = AudioSegment.from_wav(str(audio_file_path))
 
         # 메타데이터에서 정확한 시작 시간 가져오기
         start_time = float(segment.get("start", 0.0))
