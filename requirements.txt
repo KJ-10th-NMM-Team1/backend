@@ -92,4 +92,4 @@ moviepy==1.0.3
 google-cloud-aiplatform>=1.126.0
 google-generativeai>=0.3.0
 asyncio
-pydub==0.25.1
+pydub==0.25.1pydub==0.25.1
