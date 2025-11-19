@@ -150,6 +150,7 @@ def parse_segments_from_metadata(metadata: dict) -> tuple[list[dict], list[str]]
                     "source_text", ""
                 ),  # segments에서 source_text 추출
                 "audio_file": audio_file,  # 추가 정보 보존
+                "issues": seg.get("issues"),  # issues 정보 포함
             }
 
             parsed_segments.append(segment_record)

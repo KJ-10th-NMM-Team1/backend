@@ -173,13 +173,36 @@ async def delete_project(
 async def get_project_editor(
     project_id: str,
     language_code: str,
+    db: DbDep,
     project_service: ProjectService = Depends(ProjectService),
     segment_service: SegmentService = Depends(SegmentService),
 ) -> EditorStateResponse:
+    from ..issues.service import IssueService
+
     project = await project_service.get_project_by_id(project_id)  # 기본 정보
     segments = await segment_service.get_project_segment_translations(
         project_id, language_code
     )
+
+    # 이슈 조회
+    issue_service = IssueService(db)
+    issues = await issue_service.get_issues_by_project(project_id, language_code)
+
+    # 이슈를 segment_translation_id로 그룹화
+    issues_by_translation_id: dict[str, list] = {}
+    for issue in issues:
+        translation_id = issue.segment_translation_id
+        if translation_id not in issues_by_translation_id:
+            issues_by_translation_id[translation_id] = []
+        issues_by_translation_id[translation_id].append(issue)
+
+    # 각 세그먼트에 이슈 추가
+    for segment in segments:
+        translation_id = str(segment.translation_id) if segment.translation_id else None
+        if translation_id:
+            segment.issues = issues_by_translation_id.get(translation_id, [])
+        else:
+            segment.issues = []
 
     # voices = []  # TODO: project_id + language_code 기반 조회
     # glossaries = []  # TODO: project_id 기반 조회

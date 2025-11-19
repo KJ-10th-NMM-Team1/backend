@@ -11,6 +11,7 @@ from ..segment.segment_service import SegmentService
 from ..segment.service import SegmentService as SegmentTranslationService
 from ..assets.service import AssetService
 from ..assets.models import AssetCreate, AssetType
+from ..issues.service import IssueService
 from app.utils.s3 import download_metadata_from_s3, parse_segments_from_metadata
 from app.utils.audio import get_audio_duration_from_s3
 from .job_utils import (
@@ -49,7 +50,7 @@ async def check_and_create_segments(
     segments: list,
     target_lang: str,
     translated_texts: Optional[list[str]] = None,
-) -> bool:
+) -> tuple[bool, dict[int, str]]:
     """
     세그먼트 생성 - 첫 번째 타겟 언어일 때만 project_segments 생성, 번역은 항상 생성
 
@@ -59,6 +60,9 @@ async def check_and_create_segments(
         segments: 세그먼트 리스트 (기존 포맷 또는 새 포맷)
         target_lang: 타겟 언어 코드
         translated_texts: 번역된 텍스트 리스트 (새 포맷용, segments와 같은 순서)
+
+    Returns:
+        (success, translation_id_map): 성공 여부와 segment_index -> translation_id 매핑
     """
     segment_service = SegmentService(db)
 
@@ -71,6 +75,7 @@ async def check_and_create_segments(
     now = datetime.now()
     segments_created = False
     segment_ids_map = {}  # segment_index -> _id 매핑
+    translation_ids_map = {}  # segment_index -> translation_id 매핑
 
     # 기존 세그먼트가 없으면 생성
     if not existing_segments:
@@ -190,8 +195,8 @@ async def check_and_create_segments(
         if translations_to_create:
             try:
                 # 기존 번역이 있는지 확인하고 업데이트 또는 생성
-                for trans in translations_to_create:
-                    await db["segment_translations"].update_one(
+                for i, trans in enumerate(translations_to_create):
+                    result = await db["segment_translations"].update_one(
                         {
                             "segment_id": trans["segment_id"],
                             "language_code": trans["language_code"],
@@ -200,10 +205,109 @@ async def check_and_create_segments(
                         upsert=True,
                     )
 
+                    # translation_id 저장 (upserted_id가 있으면 새로 생성, 없으면 기존 것 조회)
+                    if result.upserted_id:
+                        translation_id = str(result.upserted_id)
+                    else:
+                        # 기존 번역 조회
+                        existing = await db["segment_translations"].find_one(
+                            {
+                                "segment_id": trans["segment_id"],
+                                "language_code": trans["language_code"],
+                            }
+                        )
+                        translation_id = str(existing["_id"]) if existing else None
+
+                    if translation_id:
+                        # segment_index 결정
+                        seg = segments[i] if i < len(segments) else {}
+                        if "segment_index" in seg:
+                            seg_index = seg["segment_index"]
+                        elif "seg_idx" in seg:
+                            seg_index = int(seg["seg_idx"])
+                        elif "segment_id" in seg:
+                            try:
+                                seg_index = int(seg["segment_id"])
+                            except (ValueError, TypeError):
+                                seg_index = i
+                        else:
+                            seg_index = i
+
+                        translation_ids_map[seg_index] = translation_id
+
             except Exception as exc:
                 logger.error(f"Failed to create segment translations: {exc}")
 
-    return segments_created or len(existing_segments) > 0
+    return (segments_created or len(existing_segments) > 0, translation_ids_map)
+
+
+async def create_issues_from_segments(
+    db: DbDep,
+    project_id: str,
+    target_lang: str,
+    segments: list,
+    translation_ids_map: dict[int, str],
+) -> None:
+    """
+    메타데이터의 segments에서 issues 정보를 추출하여 생성합니다.
+
+    Args:
+        db: Database connection
+        project_id: 프로젝트 ID
+        target_lang: 타겟 언어 코드
+        segments: 세그먼트 리스트 (issues 정보 포함)
+        translation_ids_map: segment_index -> translation_id 매핑
+    """
+    if not segments:
+        return
+
+    issue_service = IssueService(db)
+
+    for i, seg in enumerate(segments):
+        # segment_index 결정
+        if "segment_index" in seg:
+            seg_index = seg["segment_index"]
+        elif "seg_idx" in seg:
+            seg_index = int(seg["seg_idx"])
+        elif "segment_id" in seg:
+            try:
+                seg_index = int(seg["segment_id"])
+            except (ValueError, TypeError):
+                seg_index = i
+        else:
+            seg_index = i
+
+        # translation_id 가져오기
+        translation_id = translation_ids_map.get(seg_index)
+        if not translation_id:
+            logger.warning(
+                f"Cannot find translation_id for segment_index {seg_index}, skipping issue creation"
+            )
+            continue
+
+        # issues 정보 추출
+        issues_data = seg.get("issues")
+        if not issues_data or not isinstance(issues_data, dict):
+            continue
+
+        # IssueService를 사용하여 issues 생성
+        try:
+            created_ids = await issue_service.create_issues_from_metadata(
+                project_id=project_id,
+                language_code=target_lang,
+                segment_translation_id=translation_id,
+                issues_data=issues_data,
+            )
+            if created_ids:
+                logger.info(
+                    f"Created {len(created_ids)} issues for segment_index {seg_index}, "
+                    f"translation_id {translation_id}"
+                )
+        except Exception as exc:
+            logger.error(
+                f"Failed to create issues for segment_index {seg_index}: {exc}",
+                exc_info=True,
+            )
 
 
 async def process_md_completion(
@@ -251,13 +355,19 @@ async def process_md_completion(
             )
 
             if segments:
-                await check_and_create_segments(
+                success, translation_ids_map = await check_and_create_segments(
                     db,
                     project_id,
                     segments,
                     target_lang,
                     translated_texts=translated_texts,
                 )
+
+                # issues 생성
+                if success and translation_ids_map:
+                    await create_issues_from_segments(
+                        db, project_id, target_lang, segments, translation_ids_map
+                    )
             else:
                 logger.warning(
                     f"No segments found in S3 metadata for project {project_id}"
@@ -267,12 +377,26 @@ async def process_md_completion(
             # S3 메타데이터 처리 실패 시 기존 방식으로 fallback
             segments = metadata.get("segments", [])
             if segments:
-                await check_and_create_segments(db, project_id, segments, target_lang)
+                success, translation_ids_map = await check_and_create_segments(
+                    db, project_id, segments, target_lang
+                )
+                # issues 생성 (fallback 경로에서도)
+                if success and translation_ids_map:
+                    await create_issues_from_segments(
+                        db, project_id, target_lang, segments, translation_ids_map
+                    )
     else:
         # 기존 포맷: metadata에 직접 segments가 포함됨
         segments = metadata.get("segments", [])
         if segments:
-            await check_and_create_segments(db, project_id, segments, target_lang)
+            success, translation_ids_map = await check_and_create_segments(
+                db, project_id, segments, target_lang
+            )
+            # issues 생성
+            if success and translation_ids_map:
+                await create_issues_from_segments(
+                    db, project_id, target_lang, segments, translation_ids_map
+                )
         else:
             logger.warning(
                 f"No segments in metadata for project {project_id}, language {target_lang}"
