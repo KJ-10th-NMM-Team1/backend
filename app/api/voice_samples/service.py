@@ -13,7 +13,7 @@ from .models import VoiceSampleCreate, VoiceSampleUpdate, VoiceSampleOut
 class VoiceSampleService:
     def __init__(self, db: DbDep):
         self.collection = db.get_collection("voice_samples")
-        self.favorites_collection = db.get_collection("user_favorites")
+        self.user_voices_collection = db.get_collection("user_voices")
 
     async def create_voice_sample(
         self, data: VoiceSampleCreate, owner: UserOut
@@ -38,12 +38,14 @@ class VoiceSampleService:
             "country": data.country,
             "gender": data.gender,
             "avatar_image_path": data.avatar_image_path,
+            "category": data.category,
+            "is_default": data.is_default,
         }
 
         try:
             result = await self.collection.insert_one(sample_data)
             sample_data["_id"] = result.inserted_id
-            return VoiceSampleOut(**sample_data, is_favorite=False)
+            return VoiceSampleOut(**sample_data, is_in_my_voices=False, added_count=0)
         except PyMongoError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -75,38 +77,42 @@ class VoiceSampleService:
                     detail="You don't have permission to access this voice sample",
                 )
 
-        # 즐겨찾기 여부 확인
-        is_favorite = False
+        # 내 라이브러리에 추가했는지 확인
+        is_in_my_voices = False
         if current_user:
             try:
                 user_oid = ObjectId(current_user.id)
-                favorite = await self.favorites_collection.find_one(
+                user_voice = await self.user_voices_collection.find_one(
                     {
                         "user_id": user_oid,
-                        "sample_id": sample_oid,
-                        "type": "voice_sample",
+                        "voice_sample_id": sample_oid,
                     }
                 )
-                is_favorite = favorite is not None
+                is_in_my_voices = user_voice is not None
             except Exception:
                 pass
 
-        favorite_total = await self.favorites_collection.count_documents(
-            {"type": "voice_sample", "sample_id": sample_oid}
+        # 추가 횟수 계산
+        added_count = await self.user_voices_collection.count_documents(
+            {"voice_sample_id": sample_oid}
         )
 
         return VoiceSampleOut(
             **sample,
-            is_favorite=is_favorite,
-            favorite_count=favorite_total,
+            is_in_my_voices=is_in_my_voices,
+            added_count=added_count,
         )
 
     async def list_voice_samples(
         self,
         current_user: Optional[UserOut] = None,
         q: Optional[str] = None,
-        favorites_only: bool = False,
+        my_voices_only: bool = False,
         my_samples_only: bool = False,
+        category: Optional[str] = None,
+        is_default: Optional[bool] = None,
+        gender: Optional[str] = None,
+        languages: Optional[List[str]] = None,
         page: int = 1,
         limit: int = 20,
     ) -> Tuple[List[VoiceSampleOut], int]:
@@ -137,8 +143,8 @@ class VoiceSampleService:
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id"
                 )
 
-        # 즐겨찾기만 필터
-        if favorites_only:
+        # 내가 추가한 보이스만 필터
+        if my_voices_only:
             if not current_user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -146,22 +152,40 @@ class VoiceSampleService:
                 )
             try:
                 user_oid = ObjectId(current_user.id)
-                favorites = await self.favorites_collection.find(
-                    {"user_id": user_oid, "type": "voice_sample"}
+                user_voices = await self.user_voices_collection.find(
+                    {"user_id": user_oid}
                 ).to_list(length=None)
-                favorite_sample_ids = [
-                    fav["sample_id"] for fav in favorites if "sample_id" in fav
+                voice_sample_ids = [
+                    uv["voice_sample_id"]
+                    for uv in user_voices
+                    if "voice_sample_id" in uv
                 ]
-                if not favorite_sample_ids:
+                if not voice_sample_ids:
                     return [], 0
-                conditions.append({"_id": {"$in": favorite_sample_ids}})
+                conditions.append({"_id": {"$in": voice_sample_ids}})
             except InvalidId:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id"
                 )
 
+        # 카테고리 필터
+        if category:
+            conditions.append({"category": category})
+
+        # 기본 보이스 필터
+        if is_default is not None:
+            conditions.append({"is_default": is_default})
+
+        # 성별 필터
+        if gender and gender != "any":
+            conditions.append({"gender": gender})
+
+        # 언어 필터
+        if languages and len(languages) > 0:
+            conditions.append({"country": {"$in": languages}})
+
         # 라이브러리 기본 탭: 공개 샘플만
-        if not my_samples_only and not favorites_only:
+        if not my_samples_only and not my_voices_only:
             conditions.append({"is_public": True})
 
         if len(conditions) > 1:
@@ -185,46 +209,45 @@ class VoiceSampleService:
 
         samples = await cursor.to_list(length=limit)
 
-        # 즐겨찾기 정보 추가
+        # 내 라이브러리에 추가했는지 확인
         if current_user:
             try:
                 user_oid = ObjectId(current_user.id)
-                favorite_docs = await self.favorites_collection.find(
+                user_voice_docs = await self.user_voices_collection.find(
                     {
                         "user_id": user_oid,
-                        "type": "voice_sample",
-                        "sample_id": {"$in": [s["_id"] for s in samples]},
+                        "voice_sample_id": {"$in": [s["_id"] for s in samples]},
                     }
                 ).to_list(length=None)
-                favorite_ids = {str(fav["sample_id"]) for fav in favorite_docs}
+                my_voice_ids = {str(uv["voice_sample_id"]) for uv in user_voice_docs}
             except Exception:
-                favorite_ids = set()
+                my_voice_ids = set()
         else:
-            favorite_ids = set()
+            my_voice_ids = set()
 
-        favorite_counts: dict[str, int] = {}
+        # 추가 횟수 계산
+        added_counts: dict[str, int] = {}
         if samples:
             sample_ids = [sample["_id"] for sample in samples]
-            count_docs = await self.favorites_collection.aggregate(
+            count_docs = await self.user_voices_collection.aggregate(
                 [
                     {
                         "$match": {
-                            "type": "voice_sample",
-                            "sample_id": {"$in": sample_ids},
+                            "voice_sample_id": {"$in": sample_ids},
                         }
                     },
-                    {"$group": {"_id": "$sample_id", "count": {"$sum": 1}}},
+                    {"$group": {"_id": "$voice_sample_id", "count": {"$sum": 1}}},
                 ]
             ).to_list(length=None)
-            favorite_counts = {
+            added_counts = {
                 str(doc["_id"]): int(doc.get("count", 0)) for doc in count_docs
             }
 
         result = [
             VoiceSampleOut(
                 **sample,
-                is_favorite=str(sample["_id"]) in favorite_ids,
-                favorite_count=favorite_counts.get(str(sample["_id"]), 0),
+                is_in_my_voices=str(sample["_id"]) in my_voice_ids,
+                added_count=added_counts.get(str(sample["_id"]), 0),
             )
             for sample in samples
         ]
@@ -275,9 +298,34 @@ class VoiceSampleService:
             update_data["gender"] = data.gender
         if getattr(data, "avatar_image_path", None) is not None:
             update_data["avatar_image_path"] = data.avatar_image_path
+        if data.category is not None:
+            update_data["category"] = data.category
+        if data.is_default is not None:
+            update_data["is_default"] = data.is_default
 
         if not update_data:
-            return VoiceSampleOut(**sample, is_favorite=False)
+            # 업데이트할 데이터가 없으면 현재 상태 반환
+            is_in_my_voices = False
+            if owner:
+                try:
+                    user_oid = ObjectId(owner.id)
+                    user_voice = await self.user_voices_collection.find_one(
+                        {
+                            "user_id": user_oid,
+                            "voice_sample_id": sample_oid,
+                        }
+                    )
+                    is_in_my_voices = user_voice is not None
+                except Exception:
+                    pass
+            added_count = await self.user_voices_collection.count_documents(
+                {"voice_sample_id": sample_oid}
+            )
+            return VoiceSampleOut(
+                **sample,
+                is_in_my_voices=is_in_my_voices,
+                added_count=added_count,
+            )
 
         try:
             updated = await self.collection.find_one_and_update(
@@ -290,7 +338,28 @@ class VoiceSampleService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Voice sample not found",
                 )
-            return VoiceSampleOut(**updated, is_favorite=False)
+            # 업데이트 후 상태 반환
+            is_in_my_voices = False
+            if owner:
+                try:
+                    user_oid = ObjectId(owner.id)
+                    user_voice = await self.user_voices_collection.find_one(
+                        {
+                            "user_id": user_oid,
+                            "voice_sample_id": sample_oid,
+                        }
+                    )
+                    is_in_my_voices = user_voice is not None
+                except Exception:
+                    pass
+            added_count = await self.user_voices_collection.count_documents(
+                {"voice_sample_id": sample_oid}
+            )
+            return VoiceSampleOut(
+                **updated,
+                is_in_my_voices=is_in_my_voices,
+                added_count=added_count,
+            )
         except PyMongoError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -328,9 +397,9 @@ class VoiceSampleService:
                     detail="Voice sample not found",
                 )
 
-            # 관련 즐겨찾기도 삭제
-            await self.favorites_collection.delete_many(
-                {"sample_id": sample_oid, "type": "voice_sample"}
+            # 관련 user_voices도 삭제
+            await self.user_voices_collection.delete_many(
+                {"voice_sample_id": sample_oid}
             )
         except PyMongoError as exc:
             raise HTTPException(
@@ -338,8 +407,8 @@ class VoiceSampleService:
                 detail=f"Failed to delete voice sample: {exc}",
             ) from exc
 
-    async def add_favorite(self, sample_id: str, user: UserOut) -> None:
-        """즐겨찾기 추가"""
+    async def add_to_my_voices(self, sample_id: str, user: UserOut) -> None:
+        """보이스를 내 라이브러리에 추가"""
         try:
             sample_oid = ObjectId(sample_id)
             user_oid = ObjectId(user.id)
@@ -359,34 +428,33 @@ class VoiceSampleService:
         if not sample.get("is_public", False) and str(sample["owner_id"]) != user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to favorite this voice sample",
+                detail="You don't have permission to add this voice sample",
             )
 
-        # 이미 즐겨찾기에 있는지 확인
-        existing = await self.favorites_collection.find_one(
-            {"user_id": user_oid, "sample_id": sample_oid, "type": "voice_sample"}
+        # 이미 추가되어 있는지 확인
+        existing = await self.user_voices_collection.find_one(
+            {"user_id": user_oid, "voice_sample_id": sample_oid}
         )
         if existing:
             return  # 이미 추가되어 있음
 
-        # 즐겨찾기 추가
+        # 추가
         try:
-            await self.favorites_collection.insert_one(
+            await self.user_voices_collection.insert_one(
                 {
                     "user_id": user_oid,
-                    "sample_id": sample_oid,
-                    "type": "voice_sample",
+                    "voice_sample_id": sample_oid,
                     "created_at": datetime.utcnow(),
                 }
             )
         except PyMongoError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to add favorite: {exc}",
+                detail=f"Failed to add voice to library: {exc}",
             ) from exc
 
-    async def remove_favorite(self, sample_id: str, user: UserOut) -> None:
-        """즐겨찾기 제거"""
+    async def remove_from_my_voices(self, sample_id: str, user: UserOut) -> None:
+        """내 라이브러리에서 보이스 제거"""
         try:
             sample_oid = ObjectId(sample_id)
             user_oid = ObjectId(user.id)
@@ -396,14 +464,79 @@ class VoiceSampleService:
             ) from exc
 
         try:
-            result = await self.favorites_collection.delete_one(
-                {"user_id": user_oid, "sample_id": sample_oid, "type": "voice_sample"}
+            result = await self.user_voices_collection.delete_one(
+                {"user_id": user_oid, "voice_sample_id": sample_oid}
             )
-            if result.deleted_count == 0:
-                # 이미 제거되어 있거나 존재하지 않음 (에러 없이 처리)
-                pass
+            # 삭제되지 않아도 에러 없이 처리 (이미 제거된 경우)
         except PyMongoError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to remove favorite: {exc}",
+                detail=f"Failed to remove voice from library: {exc}",
             ) from exc
+
+    async def get_my_voices(
+        self,
+        user: UserOut,
+        page: int = 1,
+        limit: int = 20,
+    ) -> Tuple[List[VoiceSampleOut], int]:
+        """내가 추가한 보이스 목록 조회"""
+        try:
+            user_oid = ObjectId(user.id)
+        except InvalidId:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id"
+            )
+
+        # user_voices에서 voice_sample_id 목록 가져오기
+        user_voices = (
+            await self.user_voices_collection.find({"user_id": user_oid})
+            .sort("created_at", -1)
+            .to_list(length=None)
+        )
+
+        if not user_voices:
+            return [], 0
+
+        voice_sample_ids = [uv["voice_sample_id"] for uv in user_voices]
+
+        # 총 개수
+        total = len(voice_sample_ids)
+
+        # 페이지네이션
+        skip = (page - 1) * limit
+        paginated_ids = voice_sample_ids[skip : skip + limit]
+
+        # voice_samples 조회
+        samples = await self.collection.find({"_id": {"$in": paginated_ids}}).to_list(
+            length=limit
+        )
+
+        # added_count 계산
+        added_counts: dict[str, int] = {}
+        if samples:
+            sample_ids = [sample["_id"] for sample in samples]
+            count_docs = await self.user_voices_collection.aggregate(
+                [
+                    {
+                        "$match": {
+                            "voice_sample_id": {"$in": sample_ids},
+                        }
+                    },
+                    {"$group": {"_id": "$voice_sample_id", "count": {"$sum": 1}}},
+                ]
+            ).to_list(length=None)
+            added_counts = {
+                str(doc["_id"]): int(doc.get("count", 0)) for doc in count_docs
+            }
+
+        result = [
+            VoiceSampleOut(
+                **sample,
+                is_in_my_voices=True,  # 내 라이브러리이므로 항상 True
+                added_count=added_counts.get(str(sample["_id"]), 0),
+            )
+            for sample in samples
+        ]
+
+        return result, total

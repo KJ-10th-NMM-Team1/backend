@@ -25,6 +25,8 @@ class VoiceSampleCreate(BaseModel):
     avatar_image_path: Optional[str] = Field(
         default=None, description="보이스 아바타 이미지 경로"
     )
+    category: Optional[str] = Field(default=None, description="카테고리")
+    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
 
 
 class VoiceSamplePrepareUpload(BaseModel):
@@ -46,6 +48,8 @@ class VoiceSampleFinishUpload(BaseModel):
     country: Optional[str] = Field(default=None, description="국적(언어 코드)")
     gender: Optional[str] = Field(default=None, description="성별 정보")
     avatar_image_path: Optional[str] = None
+    category: Optional[str] = Field(default=None, description="카테고리")
+    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
 
 
 class VoiceSampleUpdate(BaseModel):
@@ -61,6 +65,8 @@ class VoiceSampleUpdate(BaseModel):
     gender: Optional[str] = None
     avatar_image_path: Optional[str] = None
     avatar_image_url: Optional[str] = None  # backward compatibility
+    category: Optional[str] = None
+    is_default: Optional[bool] = None
 
 
 class VoiceSampleOut(BaseModel):
@@ -75,13 +81,15 @@ class VoiceSampleOut(BaseModel):
     processed_file_path_wav: Optional[str] = None
     audio_sample_url: Optional[str] = None
     created_at: datetime
-    is_favorite: bool = Field(default=False, description="현재 사용자의 즐겨찾기 여부")
-    favorite_count: Optional[int] = Field(default=None, description="전체 즐겨찾기 수")
+    is_in_my_voices: bool = Field(default=False, description="현재 사용자가 추가했는지 여부")
+    added_count: int = Field(default=0, description="전체 추가 횟수")
     prompt_text: Optional[str] = None
     country: Optional[str] = None
     gender: Optional[str] = None
     avatar_image_path: Optional[str] = None
     avatar_image_url: Optional[str] = None  # legacy 데이터 호환
+    category: Optional[str] = Field(default=None, description="카테고리")
+    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
 
     class Config:
         populate_by_name = True

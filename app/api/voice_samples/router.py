@@ -9,7 +9,7 @@ from fastapi import (
     Form,
 )
 from fastapi.responses import StreamingResponse
-from typing import Optional, Any
+from typing import Optional, Any, List
 import os
 import asyncio
 import tempfile
@@ -249,6 +249,8 @@ async def finish_voice_sample_upload(
         country=payload.country,
         gender=payload.gender,
         avatar_image_path=payload.avatar_image_path,
+        category=payload.category,
+        is_default=payload.is_default,
     )
 
     voice_sample = await service.create_voice_sample(data, current_user)
@@ -370,8 +372,12 @@ async def finalize_voice_sample_avatar(
 async def list_voice_samples(
     db: DbDep,
     q: Optional[str] = Query(None, description="검색어 (이름 또는 설명)"),
-    favorites_only: bool = Query(False, description="즐겨찾기만 조회"),
+    my_voices_only: bool = Query(False, description="내가 추가한 보이스만 조회"),
     my_samples_only: bool = Query(False, description="내 샘플만 조회"),
+    category: Optional[str] = Query(None, description="카테고리 필터"),
+    is_default: Optional[bool] = Query(None, description="기본 보이스 필터"),
+    gender: Optional[str] = Query(None, description="성별 필터"),
+    languages: Optional[List[str]] = Query(None, description="언어 필터 (배열)"),
     page: int = Query(1, ge=1, description="페이지 번호"),
     limit: int = Query(20, ge=1, le=100, description="페이지당 개수"),
     current_user: Optional[UserOut] = Depends(get_current_user_from_cookie),
@@ -381,8 +387,12 @@ async def list_voice_samples(
     samples, total = await service.list_voice_samples(
         current_user=current_user,
         q=q,
-        favorites_only=favorites_only,
+        my_voices_only=my_voices_only,
         my_samples_only=my_samples_only,
+        category=category,
+        is_default=is_default,
+        gender=gender,
+        languages=languages,
         page=page,
         limit=limit,
     )
