@@ -1,6 +1,7 @@
 """
 Issues 서비스 로직
 """
+
 import logging
 from datetime import datetime
 from typing import Optional
@@ -101,7 +102,7 @@ class IssueService:
 
             # Sync 길이 차이 이슈
             sync_diff = q_data.get("sync")
-            if sync_diff is not None and abs(sync_diff) >= 10:
+            if sync_diff is not None and abs(sync_diff) >= 5:
                 issue = IssueCreate(
                     segment_translation_id=segment_translation_id,
                     project_id=project_id,
@@ -129,7 +130,9 @@ class IssueService:
                 language_code=language_code,
                 issue_type=IssueType.SPEAKER_IDENTIFICATION,
                 severity=IssueSeverity.MEDIUM,
-                details={"message": "Speaker identification failed, using default voice"},
+                details={
+                    "message": "Speaker identification failed, using default voice"
+                },
             )
             issue_id = await self.create_issue(issue)
             created_issue_ids.append(issue_id)
