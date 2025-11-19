@@ -45,7 +45,27 @@ class VoiceSampleService:
         try:
             result = await self.collection.insert_one(sample_data)
             sample_data["_id"] = result.inserted_id
-            return VoiceSampleOut(**sample_data, is_in_my_voices=False, added_count=0)
+            sample_oid = result.inserted_id
+
+            # 생성한 사용자를 자동으로 user_voices에 추가
+            try:
+                await self.user_voices_collection.insert_one(
+                    {
+                        "user_id": owner_oid,
+                        "voice_sample_id": sample_oid,
+                        "created_at": datetime.utcnow(),
+                    }
+                )
+                is_in_my_voices = True
+                added_count = 1
+            except PyMongoError:
+                # user_voices 추가 실패해도 보이스 생성은 성공으로 처리
+                is_in_my_voices = False
+                added_count = 0
+
+            return VoiceSampleOut(
+                **sample_data, is_in_my_voices=is_in_my_voices, added_count=added_count
+            )
         except PyMongoError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
