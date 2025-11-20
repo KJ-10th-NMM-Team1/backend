@@ -21,6 +21,7 @@ class ProjectCreate(BaseModel):
     replaceVoiceSamples: bool = True
     sourceLanguage: Optional[str] = None
     targetLanguages: List[str]
+    tags: List[str] = Field(default_factory=list)
 
 
 class ProjectThumbnail(BaseModel):
@@ -40,6 +41,7 @@ class ProjectBase(BaseModel):
     created_at: datetime
     speaker_count: Optional[int] = None
     is_replace_voice_samples: Optional[bool] = None
+    tags: List[str] = Field(default_factory=list)
 
 
 class ProjectPublic(ProjectBase):
@@ -73,6 +75,7 @@ class ProjectUpdate(BaseModel):
     default_speaker_voices: Optional[Dict[str, Dict[str, Dict[str, str]]]] = (
         None  # {target_lang: {speaker: {ref_wav_key, prompt_text}}}
     )
+    tags: Optional[List[str]] = None
 
 
 class ProjectTargetStatus(str, Enum):
@@ -114,6 +117,7 @@ class ProjectOut(BaseModel):
     source_language: Optional[str] = None
     created_at: datetime
     speaker_count: Optional[int] = None
+    tags: List[str] = Field(default_factory=list)
 
 
 class EditorPlaybackState(BaseModel):

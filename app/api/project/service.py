@@ -17,6 +17,24 @@ from app.config.s3 import drop_projects
 from app.config.env import settings
 
 
+def normalize_tags(tags: list[str] | None, limit: int = 10) -> list[str]:
+    if not tags:
+        return []
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for raw in tags:
+        tag = (raw or "").strip().lstrip("#")
+        if not tag:
+            continue
+        if tag in seen:
+            continue
+        seen.add(tag)
+        normalized.append(tag)
+        if len(normalized) >= limit:
+            break
+    return normalized
+
+
 class ProjectService:
     def __init__(self, db: DbDep):
         self.db = db
@@ -119,6 +137,7 @@ class ProjectService:
             created_at=now,
             speaker_count=payload.speakerCount,
             is_replace_voice_samples=payload.replaceVoiceSamples,
+            tags=normalize_tags(payload.tags),
         )
         doc = base.model_dump(exclude_none=True)
         result = await self.project_collection.insert_one(doc)
@@ -131,6 +150,8 @@ class ProjectService:
         project_id = payload.project_id
         update_data = payload.model_dump(exclude={"project_id"}, exclude_none=True)
         update_data["updated_at"] = datetime.now()
+        if "tags" in update_data:
+            update_data["tags"] = normalize_tags(update_data["tags"])
 
         result = await self.project_collection.update_one(
             {"_id": ObjectId(project_id)},
