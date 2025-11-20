@@ -6,7 +6,6 @@ PyObjectId = Annotated[
     str, BeforeValidator(lambda v: str(v) if isinstance(v, ObjectId) else v)
 ]
 
-
 class Accent(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     language_code: str = Field(..., description="Language code (e.g., ko, en)")
@@ -16,7 +15,6 @@ class Accent(BaseModel):
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
-
 
 class AccentCreate(BaseModel):
     language_code: str
