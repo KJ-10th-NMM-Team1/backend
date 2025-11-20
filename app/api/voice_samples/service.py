@@ -5,6 +5,26 @@ from bson.errors import InvalidId
 from pymongo.errors import PyMongoError
 from typing import Optional, List, Tuple, Any
 
+
+def _normalize_categories(category: Any) -> Optional[list[str]]:
+    """카테고리를 배열 형태로 정규화"""
+    if category is None:
+        return None
+    if isinstance(category, list):
+        cleaned = [str(c).strip() for c in category if str(c).strip()]
+        return cleaned or None
+    if isinstance(category, str):
+        cleaned = category.strip()
+        return [cleaned] if cleaned else None
+    return None
+
+
+def _with_builtin_flag(sample: dict[str, Any]) -> dict[str, Any]:
+    """is_builtin 필드가 없을 때 legacy is_default 값을 사용해 보완"""
+    if "is_builtin" not in sample:
+        sample["is_builtin"] = sample.get("is_default", False)
+    return sample
+
 from ..deps import DbDep
 from ..auth.model import UserOut
 from .models import VoiceSampleCreate, VoiceSampleUpdate, VoiceSampleOut
@@ -37,9 +57,11 @@ class VoiceSampleService:
             "created_at": datetime.utcnow(),
             "country": data.country,
             "gender": data.gender,
+            "age": data.age,
+            "accent": data.accent,
             "avatar_image_path": data.avatar_image_path,
-            "category": data.category,
-            "is_default": data.is_default,
+            "category": _normalize_categories(data.category),
+            "is_builtin": data.is_builtin,
         }
 
         try:
@@ -117,6 +139,8 @@ class VoiceSampleService:
             {"voice_sample_id": sample_oid}
         )
 
+        sample = _with_builtin_flag(sample)
+
         return VoiceSampleOut(
             **sample,
             is_in_my_voices=is_in_my_voices,
@@ -130,8 +154,10 @@ class VoiceSampleService:
         my_voices_only: bool = False,
         my_samples_only: bool = False,
         category: Optional[str] = None,
-        is_default: Optional[bool] = None,
+        is_builtin: Optional[bool] = None,
         gender: Optional[str] = None,
+        age: Optional[str] = None,
+        accent: Optional[str] = None,
         languages: Optional[List[str]] = None,
         page: int = 1,
         limit: int = 20,
@@ -193,12 +219,27 @@ class VoiceSampleService:
             conditions.append({"category": category})
 
         # 기본 보이스 필터
-        if is_default is not None:
-            conditions.append({"is_default": is_default})
+        if is_builtin is not None:
+            conditions.append(
+                {
+                    "$or": [
+                        {"is_builtin": is_builtin},
+                        {"is_default": is_builtin},  # backward compatibility
+                    ]
+                }
+            )
 
         # 성별 필터
         if gender and gender != "any":
             conditions.append({"gender": gender})
+
+        # 나이대 필터
+        if age and age != "any":
+            conditions.append({"age": age})
+
+        # 억양 필터
+        if accent and accent != "any":
+            conditions.append({"accent": accent})
 
         # 언어 필터
         if languages and len(languages) > 0:
@@ -263,14 +304,16 @@ class VoiceSampleService:
                 str(doc["_id"]): int(doc.get("count", 0)) for doc in count_docs
             }
 
-        result = [
-            VoiceSampleOut(
-                **sample,
-                is_in_my_voices=str(sample["_id"]) in my_voice_ids,
-                added_count=added_counts.get(str(sample["_id"]), 0),
+        result = []
+        for sample in samples:
+            sample = _with_builtin_flag(sample)
+            result.append(
+                VoiceSampleOut(
+                    **sample,
+                    is_in_my_voices=str(sample["_id"]) in my_voice_ids,
+                    added_count=added_counts.get(str(sample["_id"]), 0),
+                )
             )
-            for sample in samples
-        ]
 
         return result, total
 
@@ -316,12 +359,16 @@ class VoiceSampleService:
             update_data["country"] = data.country
         if data.gender is not None:
             update_data["gender"] = data.gender
+        if data.age is not None:
+            update_data["age"] = data.age
+        if data.accent is not None:
+            update_data["accent"] = data.accent
         if getattr(data, "avatar_image_path", None) is not None:
             update_data["avatar_image_path"] = data.avatar_image_path
         if data.category is not None:
-            update_data["category"] = data.category
-        if data.is_default is not None:
-            update_data["is_default"] = data.is_default
+            update_data["category"] = _normalize_categories(data.category)
+        if data.is_builtin is not None:
+            update_data["is_builtin"] = data.is_builtin
 
         if not update_data:
             # 업데이트할 데이터가 없으면 현재 상태 반환
@@ -341,6 +388,7 @@ class VoiceSampleService:
             added_count = await self.user_voices_collection.count_documents(
                 {"voice_sample_id": sample_oid}
             )
+            sample = _with_builtin_flag(sample)
             return VoiceSampleOut(
                 **sample,
                 is_in_my_voices=is_in_my_voices,
@@ -375,6 +423,7 @@ class VoiceSampleService:
             added_count = await self.user_voices_collection.count_documents(
                 {"voice_sample_id": sample_oid}
             )
+            updated = _with_builtin_flag(updated)
             return VoiceSampleOut(
                 **updated,
                 is_in_my_voices=is_in_my_voices,
