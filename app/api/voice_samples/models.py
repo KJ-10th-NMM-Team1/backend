@@ -22,11 +22,15 @@ class VoiceSampleCreate(BaseModel):
     prompt_text: Optional[str] = Field(None, description="STT로 추출한 프롬프트 텍스트")
     country: Optional[str] = Field(default=None, description="국적(언어 코드)")
     gender: Optional[str] = Field(default=None, description="성별 정보")
+    age: Optional[str] = Field(default=None, description="나이대 (young, middle_aged, old)")
+    accent: Optional[str] = Field(default=None, description="억양 코드")
     avatar_image_path: Optional[str] = Field(
         default=None, description="보이스 아바타 이미지 경로"
     )
-    category: Optional[str] = Field(default=None, description="카테고리")
-    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
+    category: Optional[list[str] | str] = Field(
+        default=None, description="카테고리(여러 개 선택 가능)"
+    )
+    is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
 
 
 class VoiceSamplePrepareUpload(BaseModel):
@@ -47,9 +51,13 @@ class VoiceSampleFinishUpload(BaseModel):
     object_key: str = Field(..., description="S3에 업로드된 파일의 object_key")
     country: Optional[str] = Field(default=None, description="국적(언어 코드)")
     gender: Optional[str] = Field(default=None, description="성별 정보")
+    age: Optional[str] = Field(default=None, description="나이대")
+    accent: Optional[str] = Field(default=None, description="억양 코드")
     avatar_image_path: Optional[str] = None
-    category: Optional[str] = Field(default=None, description="카테고리")
-    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
+    category: Optional[list[str] | str] = Field(
+        default=None, description="카테고리(여러 개 선택 가능)"
+    )
+    is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
 
 
 class VoiceSampleUpdate(BaseModel):
@@ -63,10 +71,12 @@ class VoiceSampleUpdate(BaseModel):
     prompt_text: Optional[str] = None
     country: Optional[str] = None
     gender: Optional[str] = None
+    age: Optional[str] = None
+    accent: Optional[str] = None
     avatar_image_path: Optional[str] = None
     avatar_image_url: Optional[str] = None  # backward compatibility
-    category: Optional[str] = None
-    is_default: Optional[bool] = None
+    category: Optional[list[str] | str] = None
+    is_builtin: Optional[bool] = None
 
 
 class VoiceSampleOut(BaseModel):
@@ -86,10 +96,14 @@ class VoiceSampleOut(BaseModel):
     prompt_text: Optional[str] = None
     country: Optional[str] = None
     gender: Optional[str] = None
+    age: Optional[str] = None
+    accent: Optional[str] = None
     avatar_image_path: Optional[str] = None
     avatar_image_url: Optional[str] = None  # legacy 데이터 호환
-    category: Optional[str] = Field(default=None, description="카테고리")
-    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
+    category: Optional[list[str] | str] = Field(
+        default=None, description="카테고리(여러 개 선택 가능)"
+    )
+    is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
 
     class Config:
         populate_by_name = True
