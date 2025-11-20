@@ -222,19 +222,19 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                         )
 
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=20  # STT 완료 시 20%
+            status=ProjectTargetStatus.PROCESSING, progress=20
         )
     elif stage == "translation_started":
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=21  # MT 시작 시 25%
+            status=ProjectTargetStatus.PROCESSING, progress=21
         )
     elif stage == "translation_completed":  # mt 완료
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=35  # MT 완료 시 50%
+            status=ProjectTargetStatus.PROCESSING, progress=35
         )
     elif stage == "tts_started":  # TTS 시작
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=36  # TTS 시작 시 55%
+            status=ProjectTargetStatus.PROCESSING, progress=36
         )
     elif stage == "tts_completed":  # TTS 완료
         # speaker_voices를 default_speaker_voices 형식으로 변환하여 프로젝트에 저장
