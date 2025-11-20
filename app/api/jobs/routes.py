@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from datetime import datetime
 import logging
+from bson import ObjectId
 
 from ..deps import DbDep
 from .models import JobRead, JobUpdateStatus
@@ -13,13 +14,15 @@ from ..project.models import ProjectTargetUpdate, ProjectTargetStatus, ProjectUp
 from ..project.service import ProjectService
 from app.utils.project_utils import extract_language_code
 
-# 리팩토링된 모듈들
-from .event_dispatcher import (
-    # dispatch_pipeline,
-    dispatch_target_update,
-    # dispatch_audio_completed,
-    # update_pipeline,
+
+# 새로운 진행도 이벤트 시스템
+from ..progress import (
+    dispatch_target_progress,
+    dispatch_task_completed,
+    dispatch_task_failed,
+    TaskStatus,
 )
+
 from .segment_handler import (
     # check_and_create_segments,
     process_md_completion,
@@ -163,6 +166,15 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
     # ProjectService 인스턴스 생성
     project_service = ProjectService(db)
 
+    # 프로젝트 정보 조회 (제목 가져오기)
+    project_title = None
+    try:
+        project_doc = await db["projects"].find_one({"_id": ObjectId(project_id)})
+        if project_doc:
+            project_title = project_doc.get("title")
+    except Exception as exc:
+        logger.warning(f"Failed to get project title: {exc}")
+
     # stage별 project_target 업데이트를 위한 payload
     target_update = None
 
@@ -173,7 +185,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
         )
     elif stage == "asr_started":  # stt 시작
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=10  # STT 시작 시 10%
+            status=ProjectTargetStatus.PROCESSING, progress=5  # STT 시작 시 5%
         )
     elif stage == "asr_completed":  # stt 완료
         # 원본 오디오, 발화 음성, 배경음, 오디오 제거 비디오 경로를 프로젝트에 저장
@@ -210,19 +222,19 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                         )
 
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=20  # STT 완료 시 20%
+            status=ProjectTargetStatus.PROCESSING, progress=20
         )
     elif stage == "translation_started":
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=21  # MT 시작 시 25%
+            status=ProjectTargetStatus.PROCESSING, progress=21
         )
     elif stage == "translation_completed":  # mt 완료
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=35  # MT 완료 시 50%
+            status=ProjectTargetStatus.PROCESSING, progress=35
         )
     elif stage == "tts_started":  # TTS 시작
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.PROCESSING, progress=36  # TTS 시작 시 55%
+            status=ProjectTargetStatus.PROCESSING, progress=36
         )
     elif stage == "tts_completed":  # TTS 완료
         # speaker_voices를 default_speaker_voices 형식으로 변환하여 프로젝트에 저장
@@ -247,7 +259,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                 )
 
         target_update = ProjectTargetUpdate(
-            status=ProjectTargetStatus.COMPLETED, progress=70  # TTS 완료
+            status=ProjectTargetStatus.PROCESSING, progress=85  # TTS 완료 시 85%
         )
     elif stage == "segment_tts_completed":  # 세그먼트 TTS 재생성 완료
         if metadata and language_code:
@@ -261,7 +273,7 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
     elif stage == "mux_started":  # 비디오 처리 시작
         target_update = ProjectTargetUpdate(
             status=ProjectTargetStatus.PROCESSING,
-            progress=71,  # 비디오 처리 시작 시 70%
+            progress=86,  # 비디오 처리 시작 시 86%
         )
     elif stage == "done":  # 비디오 처리 완료
         # speaker_refs 또는 speaker_voices가 있으면 저장 (tts_completed를 건너뛴 경우 대비)
@@ -337,12 +349,24 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                     project_id, language_code, target_update
                 )
 
-                # SSE 이벤트 브로드캐스트
-                await dispatch_target_update(
-                    project_id,
-                    language_code,
-                    target_update.status or ProjectTargetStatus.PROCESSING,
-                    target_update.progress or 0,
+                # 새로운 진행도 이벤트 시스템으로 브로드캐스트
+                await dispatch_target_progress(
+                    project_id=project_id,
+                    target_lang=language_code,
+                    stage=stage,
+                    status=(
+                        TaskStatus.COMPLETED
+                        if stage == "done"
+                        else (
+                            TaskStatus.FAILED
+                            if stage == "failed"
+                            else TaskStatus.PROCESSING
+                        )
+                    ),
+                    progress=target_update.progress or 0,
+                    message=f"Stage: {stage}",
+                    db=db,  # DB 전달하여 전체 진행도 자동 계산
+                    project_title=project_title,  # 프로젝트 제목 전달
                 )
 
         except Exception as exc:
