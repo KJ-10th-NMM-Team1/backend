@@ -19,6 +19,7 @@ from .suggesion.router import suggestion_router
 from .youtube.router import youtube_router
 from .audio.router import audio_router
 from .mux.router import router as mux_router
+from .progress.router import progress_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -44,3 +45,4 @@ api_router.include_router(suggestion_router)
 api_router.include_router(youtube_router)
 api_router.include_router(audio_router)
 api_router.include_router(mux_router)
+api_router.include_router(progress_router)

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, status, Request
-from fastapi.responses import StreamingResponse
 from typing import Any, Dict
 import asyncio, json
 from datetime import datetime
@@ -30,55 +29,6 @@ async def update_project_pipeline_stage(
     payload.project_id = project_id
     result = await update_pipeline_stage(db, payload)
     return {"success": result["success"]}
-
-
-@pipeline_router.get("/{project_id}/stream", summary="파이프라인 상태 실시간 스트림")
-async def stream_pipeline_status(project_id: str, db: DbDep, request: Request):
-    """SSE를 통해 파이프라인 상태를 실시간으로 스트리밍합니다."""
-
-    async def event_stream():
-        try:
-            while True:
-                # 클라이언트 연결 해제 확인
-                if await request.is_disconnected():
-                    logger.info(f"Client disconnected from /stream for project {project_id}")
-                    break
-
-                # 현재 파이프라인 상태 조회
-                pipeline = await get_pipeline_status(db, project_id)
-
-                # SSE 형식으로 데이터 전송
-                data = pipeline.model_dump(mode="json")
-                # datetime 객체를 문자열로 변환
-                data = _serialize_datetime(data)
-                logger.info(f"info data: {data}")
-
-                yield f"data: {json.dumps(data)}\n\n"
-
-                # (폴링)3초마다 업데이트 (실제로는 파이프라인 상태 변경 시에만 전송하도록 최적화 가능)
-                await asyncio.sleep(3)
-
-        except asyncio.CancelledError:
-            logger.info(f"Stream cancelled for project {project_id}")
-            raise
-        except Exception as e:
-            # 에러 발생 시 클라이언트에 에러 메시지 전송
-            logger.error(f"Error in stream for project {project_id}: {e}")
-            error_data = {"error": str(e), "timestamp": datetime.now().isoformat()}
-            yield f"data: {json.dumps(error_data)}\n\n"
-        finally:
-            logger.info(f"Cleaning up stream connection for project {project_id}")
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control",
-        },
-    )
 
 
 def _serialize_datetime(obj: Any) -> Any:
