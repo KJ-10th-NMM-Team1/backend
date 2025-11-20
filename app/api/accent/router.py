@@ -6,8 +6,10 @@ from ..deps import DbDep
 
 router = APIRouter(prefix="/accents", tags=["accents"])
 
+
 def service(db: DbDep) -> AccentService:
     return AccentService(db)
+
 
 DEFAULT_ACCENTS = [
     # Korean
