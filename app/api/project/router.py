@@ -19,6 +19,8 @@ from .models import (
     SegmentTranslationCreate,
     SegmentTTSRegenerateRequest,
     SegmentTTSRegenerateResponse,
+    BatchSegmentTTSRegenerateRequest,
+    BatchSegmentTTSRegenerateResponse,
 )
 from ..jobs.service import start_segments_tts_job
 
@@ -313,4 +315,64 @@ async def regenerate_segment_tts(
         project_id=project_id,
         target_lang=payload.target_lang,
         mod=payload.mod,
+    )
+
+
+@project_router.post(
+    "/{project_id}/segments/batch-regenerate-tts",
+    response_model=BatchSegmentTTSRegenerateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="여러 세그먼트 TTS 일괄 재생성",
+)
+async def batch_regenerate_segment_tts(
+    project_id: str,
+    payload: BatchSegmentTTSRegenerateRequest,
+    db: DbDep,
+) -> BatchSegmentTTSRegenerateResponse:
+    """
+    여러 세그먼트에 대해 TTS를 일괄 재생성합니다.
+
+    - **project_id**: 프로젝트 ID
+    - **segments**: 세그먼트 배열 (각각 segment_id, translated_text, start, end, voice_sample_id 포함)
+    - **target_lang**: 타겟 언어 코드
+    - **mod**: "fixed" (고정 길이) 또는 "dynamic" (동적 길이)
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    logger.info(
+        f"🔍 [batch_regenerate_segment_tts] Received request: project_id={project_id}, "
+        f"segment_count={len(payload.segments)}, target_lang={payload.target_lang}"
+    )
+
+    segments_data = [
+        {
+            "segment_id": seg.segment_id,
+            "translated_text": seg.translated_text,
+            "start": seg.start,
+            "end": seg.end,
+        }
+        for seg in payload.segments
+    ]
+
+    job = await start_segments_tts_job(
+        db,
+        project_id=project_id,
+        target_lang=payload.target_lang,
+        mod=payload.mod,
+        segments=segments_data,
+        voice_sample_id=payload.voice_sample_id,
+    )
+
+    logger.info(
+        f"✅ [batch_regenerate_segment_tts] Queued job {job.job_id} with {len(segments_data)} segments"
+    )
+
+    return BatchSegmentTTSRegenerateResponse(
+        job_ids=[job.job_id],
+        project_id=project_id,
+        target_lang=payload.target_lang,
+        mod=payload.mod,
+        segment_count=len(payload.segments),
     )
