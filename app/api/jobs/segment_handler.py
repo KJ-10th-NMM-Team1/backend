@@ -19,7 +19,7 @@ from .job_utils import (
     validate_segment_exists,
     extract_error_message,
 )
-from .event_dispatcher import dispatch_audio_completed
+from ..progress.dispatcher import dispatch_audio_completed
 
 logger = logging.getLogger(__name__)
 

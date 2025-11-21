@@ -26,6 +26,8 @@ class ProgressEventType(str, Enum):
     TASK_COMPLETED = "task-completed"  # 작업 완료
     TASK_FAILED = "task-failed"  # 작업 실패
     HEARTBEAT = "heartbeat"  # 연결 유지
+    AUDIO_COMPLETED = "audio-completed"  # 세그먼트 오디오 생성 완료
+    AUDIO_FAILED = "audio-failed"  # 세그먼트 오디오 생성 실패
 
 
 class ProgressEvent(BaseModel):

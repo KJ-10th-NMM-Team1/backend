@@ -1,17 +1,13 @@
 """
 프로젝트 진행도 이벤트 디스패처
 """
+
 from typing import Optional, Dict, Any
 from datetime import datetime
 import logging
 import asyncio
 
-from .models import (
-    ProgressEvent,
-    ProgressEventType,
-    TaskStatus,
-    get_progress_for_stage
-)
+from .models import ProgressEvent, ProgressEventType, TaskStatus, get_progress_for_stage
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +67,7 @@ async def broadcast_progress_event(
         event_data["metadata"] = metadata
 
     # 이벤트 객체
-    event = {
-        "event": event_type.value,
-        "data": event_data
-    }
+    event = {"event": event_type.value, "data": event_data}
 
     # 로그
     logger.info(
@@ -159,7 +152,7 @@ async def dispatch_target_progress(
     progress: Optional[int] = None,
     message: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
-    db = None,  # DB 인스턴스 (전체 진행도 계산용)
+    db=None,  # DB 인스턴스 (전체 진행도 계산용)
     project_title: Optional[str] = None,
 ):
     """
@@ -297,4 +290,52 @@ async def dispatch_task_failed(
         stage=stage,
         message=f"작업 실패: {error}",
         metadata={"error": error},
+    )
+
+
+async def dispatch_audio_completed(
+    project_id: str,
+    language_code: str,
+    segment_id: str,
+    audio_s3_key: Optional[str] = None,
+    audio_duration: Optional[float] = None,
+    status: str = "completed",
+    error_message: Optional[str] = None,
+):
+    """
+    세그먼트 오디오 생성 완료/실패 이벤트
+
+    Args:
+        project_id: 프로젝트 ID
+        language_code: 언어 코드
+        segment_id: 세그먼트 ID
+        audio_s3_key: 오디오 S3 키
+        audio_duration: 오디오 길이 (초)
+        status: 상태 ("completed" 또는 "failed")
+        error_message: 에러 메시지 (실패 시)
+    """
+    event_type = (
+        ProgressEventType.AUDIO_COMPLETED
+        if status == "completed"
+        else ProgressEventType.AUDIO_FAILED
+    )
+    task_status = TaskStatus.COMPLETED if status == "completed" else TaskStatus.FAILED
+
+    metadata = {
+        "segmentId": segment_id,
+        "languageCode": language_code,
+    }
+    if audio_s3_key:
+        metadata["audioS3Key"] = audio_s3_key
+    if audio_duration is not None:
+        metadata["audioDuration"] = audio_duration
+    if error_message:
+        metadata["error"] = error_message
+
+    await broadcast_progress_event(
+        event_type=event_type,
+        project_id=project_id,
+        target_lang=language_code,
+        status=task_status,
+        metadata=metadata,
     )
