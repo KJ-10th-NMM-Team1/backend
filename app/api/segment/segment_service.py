@@ -238,7 +238,11 @@ class SegmentService:
         result = []
         for seg in segments:
             segment_id_str = str(seg["_id"])  # 문자열로 변환
-            translation_data = translation_map.get(segment_id_str, {})
+            translation_data = translation_map.get(segment_id_str)
+
+            # translation_data가 있는 세그먼트만 반환 (해당 언어에 번역이 있는 경우만)
+            if not translation_data:
+                continue
 
             # segment_translations의 편집된 값을 우선 사용하도록 순서 설정
             # seg(project_segments)를 먼저, 그 다음 translation_data를 병합하여
@@ -417,36 +421,13 @@ class SegmentService:
                     status_code=500, detail="Failed to upload split audio to S3"
                 )
 
-            # 10. DB 업데이트: 기존 세그먼트 업데이트
+            # 10. 새 세그먼트 DB 저장 (part2)
             now = datetime.now(timezone.utc)
 
-            # 기존 세그먼트 업데이트 (part1)
-            await self.segment_collection.update_one(
-                {"_id": segment_oid},
-                {
-                    "$set": {
-                        "end": start_time + split_time,
-                        "updated_at": now,
-                    }
-                },
-            )
-
-            # 기존 번역 업데이트 (part1)
-            await self.translation_collection.update_one(
-                {"segment_id": segment_id, "language_code": language_code},
-                {
-                    "$set": {
-                        "end": start_time + split_time,
-                        "segment_audio_url": part1_key,
-                        "updated_at": now,
-                    }
-                },
-            )
-
-            # 11. DB에 새 세그먼트 생성 (part2)
+            # project_segments에 새 세그먼트 추가
             new_segment_doc = {
                 "project_id": segment.get("project_id"),
-                "segment_index": segment.get("segment_index", 0) + 0.5,  # 중간 인덱스
+                "segment_index": segment.get("segment_index", 0) + 0.5,
                 "speaker_tag": segment.get("speaker_tag", ""),
                 "start": start_time + split_time,
                 "end": end_time,
@@ -460,7 +441,7 @@ class SegmentService:
             )
             new_segment_id = str(new_segment_result.inserted_id)
 
-            # 새 번역 생성 (part2)
+            # segment_translations에 새 세그먼트 번역 추가
             new_translation_doc = {
                 "segment_id": new_segment_id,
                 "language_code": language_code,
@@ -473,7 +454,7 @@ class SegmentService:
             }
             await self.translation_collection.insert_one(new_translation_doc)
 
-            # 12. 응답 생성
+            # 11. 응답 생성
             response = [
                 SegmentSplitResponseItem(
                     id=segment_id,  # 기존 ID 유지
@@ -634,71 +615,22 @@ class SegmentService:
                     status_code=500, detail="Failed to upload merged audio to S3"
                 )
 
-            # 13. DB 업데이트: 첫 번째 세그먼트를 병합된 세그먼트로 업데이트
-            # 프론트엔드에서 전달받은 시간 정보 사용
+            # 13. 응답 데이터 생성
             start_time = sorted_segments_data[0]["start"]
             end_time = sorted_segments_data[-1]["end"]
-            now = datetime.now(timezone.utc)
 
             first_segment = sorted_segments[0]
             first_segment_id = str(first_segment["_id"])
 
-            # 병합된 source_text 생성 (모든 세그먼트의 텍스트 결합)
+            # 병합된 텍스트 생성 (응답용)
             merged_source_text = " ".join(
                 [seg.get("source_text", "") for seg in sorted_segments]
             )
-
-            # 첫 번째 세그먼트 업데이트
-            await self.segment_collection.update_one(
-                {"_id": first_segment["_id"]},
-                {
-                    "$set": {
-                        "end": end_time,
-                        "source_text": merged_source_text,
-                        "updated_at": now,
-                    }
-                },
-            )
-
-            # 14. 첫 번째 세그먼트의 번역 업데이트
-            # 모든 번역의 target_text 결합
             merged_target_text = " ".join(
                 [t.get("target_text", "") for t in sorted_translations]
             )
 
-            # 기존 번역이 있으면 업데이트, 없으면 생성
-            await self.translation_collection.update_one(
-                {"segment_id": first_segment_id, "language_code": language_code},
-                {
-                    "$set": {
-                        "start": start_time,
-                        "end": end_time,
-                        "target_text": merged_target_text,
-                        "segment_audio_url": merged_key,
-                        "updated_at": now,
-                    },
-                    "$setOnInsert": {
-                        "created_at": now,
-                    },
-                },
-                upsert=True,
-            )
-
-            # 15. 나머지 세그먼트들 삭제 (첫 번째 제외)
-            remaining_segment_oids = segment_oids[1:]  # 첫 번째 제외
-            remaining_segment_ids = segment_ids[1:]  # 첫 번째 제외
-
-            if remaining_segment_oids:
-                await self.segment_collection.delete_many(
-                    {"_id": {"$in": remaining_segment_oids}}
-                )
-
-                # 삭제된 세그먼트들의 모든 번역 삭제
-                await self.translation_collection.delete_many(
-                    {"segment_id": {"$in": remaining_segment_ids}}
-                )
-
-            # 16. 응답 생성
+            # 13. 응답 생성 (DB 저장은 유저가 저장할 때 수행)
             response = MergeSegmentResponse(
                 id=first_segment_id,
                 start=start_time,
