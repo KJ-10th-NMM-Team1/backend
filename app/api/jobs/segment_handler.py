@@ -65,7 +65,6 @@ async def check_and_create_segments(
     Returns:
         (success, translation_id_map): 성공 여부와 segment_index -> translation_id 매핑
     """
-    segment_service = SegmentService(db)
     now = datetime.now()
     segment_ids_map = {}  # segment_index -> _id 매핑
     translation_ids_map = {}  # segment_index -> translation_id 매핑
@@ -73,13 +72,10 @@ async def check_and_create_segments(
     # 분산 락으로 project_segments 생성 동기화
     # 첫 번째 타겟 언어가 생성 완료할 때까지 두 번째는 대기
     async with distributed_lock(f"project_segments:{project_id}"):
-        # 락 획득 후 세그먼트 존재 여부 확인
-        try:
-            existing_segments = await segment_service.get_segments_by_project(
-                project_id
-            )
-        except Exception:
-            existing_segments = None
+        # 락 획득 후 세그먼트 존재 여부 확인 (직접 DB 쿼리)
+        existing_segments = (
+            await db["project_segments"].find({"project_id": project_id}).to_list(None)
+        )
 
         if existing_segments:
             # 이미 생성됨 - ID 매핑만 생성
@@ -128,7 +124,9 @@ async def check_and_create_segments(
 
             if segments_to_create:
                 try:
-                    result = await db["project_segments"].insert_many(segments_to_create)
+                    result = await db["project_segments"].insert_many(
+                        segments_to_create
+                    )
                     for idx, seg_id in enumerate(result.inserted_ids):
                         segment_ids_map[segments_to_create[idx]["segment_index"]] = (
                             seg_id
