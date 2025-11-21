@@ -424,10 +424,19 @@ class SegmentService:
             # 10. 새 세그먼트 DB 저장 (part2)
             now = datetime.now(timezone.utc)
 
+            # 프로젝트 내 최대 segment_index 조회 후 +1
+            project_id = segment.get("project_id")
+            max_segment = await self.segment_collection.find_one(
+                {"project_id": project_id},
+                sort=[("segment_index", -1)],
+            )
+            max_index = max_segment.get("segment_index", 0) if max_segment else 0
+            new_segment_index = max_index + 1
+
             # project_segments에 새 세그먼트 추가
             new_segment_doc = {
-                "project_id": segment.get("project_id"),
-                "segment_index": segment.get("segment_index", 0) + 0.5,
+                "project_id": project_id,
+                "segment_index": new_segment_index,
                 "speaker_tag": segment.get("speaker_tag", ""),
                 "start": start_time + split_time,
                 "end": end_time,
