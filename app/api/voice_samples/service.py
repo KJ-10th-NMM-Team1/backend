@@ -169,10 +169,8 @@ class VoiceSampleService:
         my_samples_only: bool = False,
         category: Optional[str] = None,
         is_builtin: Optional[bool] = None,
-        gender: Optional[str] = None,
-        age: Optional[str] = None,
-        accent: Optional[str] = None,
         languages: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None,
         page: int = 1,
         limit: int = 20,
     ) -> Tuple[List[VoiceSampleOut], int]:
@@ -244,17 +242,9 @@ class VoiceSampleService:
                 }
             )
 
-        # 성별 필터
-        if gender and gender != "any":
-            conditions.append({"gender": gender})
-
-        # 나이대 필터
-        if age and age != "any":
-            conditions.append({"age": age})
-
-        # 억양 필터
-        if accent and accent != "any":
-            conditions.append({"accent": accent})
+        # 태그 필터 (모든 태그 포함)
+        if tags:
+            conditions.append({"tags": {"$all": tags}})
 
         # 언어 필터
         if languages and len(languages) > 0:
