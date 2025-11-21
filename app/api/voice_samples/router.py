@@ -251,7 +251,9 @@ async def finish_voice_sample_upload(
         age=payload.age,
         accent=payload.accent,
         avatar_image_path=payload.avatar_image_path,
+        avatar_preset=payload.avatar_preset,
         category=payload.category,
+        tags=payload.tags,
         is_builtin=payload.is_builtin,
     )
 

@@ -27,9 +27,11 @@ class VoiceSampleCreate(BaseModel):
     avatar_image_path: Optional[str] = Field(
         default=None, description="보이스 아바타 이미지 경로"
     )
+    avatar_preset: Optional[str] = Field(default=None, description="프리셋 아바타 ID")
     category: Optional[list[str] | str] = Field(
         default=None, description="카테고리(여러 개 선택 가능)"
     )
+    tags: Optional[list[str] | str] = Field(default=None, description="자유 태그 목록")
     is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
 
 
@@ -54,9 +56,11 @@ class VoiceSampleFinishUpload(BaseModel):
     age: Optional[str] = Field(default=None, description="나이대")
     accent: Optional[str] = Field(default=None, description="억양 코드")
     avatar_image_path: Optional[str] = None
+    avatar_preset: Optional[str] = None
     category: Optional[list[str] | str] = Field(
         default=None, description="카테고리(여러 개 선택 가능)"
     )
+    tags: Optional[list[str] | str] = Field(default=None, description="자유 태그 목록")
     is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
 
 
@@ -75,7 +79,9 @@ class VoiceSampleUpdate(BaseModel):
     accent: Optional[str] = None
     avatar_image_path: Optional[str] = None
     avatar_image_url: Optional[str] = None  # backward compatibility
+    avatar_preset: Optional[str] = None
     category: Optional[list[str] | str] = None
+    tags: Optional[list[str] | str] = None
     is_builtin: Optional[bool] = None
 
 
@@ -100,9 +106,11 @@ class VoiceSampleOut(BaseModel):
     accent: Optional[str] = None
     avatar_image_path: Optional[str] = None
     avatar_image_url: Optional[str] = None  # legacy 데이터 호환
+    avatar_preset: Optional[str] = None
     category: Optional[list[str] | str] = Field(
         default=None, description="카테고리(여러 개 선택 가능)"
     )
+    tags: Optional[list[str] | str] = Field(default=None, description="자유 태그 목록")
     is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
 
     class Config:

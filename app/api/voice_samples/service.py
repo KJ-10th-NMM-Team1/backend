@@ -25,6 +25,18 @@ def _with_builtin_flag(sample: dict[str, Any]) -> dict[str, Any]:
         sample["is_builtin"] = sample.get("is_default", False)
     return sample
 
+
+def _normalize_tags(tags: Any) -> Optional[list[str]]:
+    if tags is None:
+        return None
+    if isinstance(tags, list):
+        cleaned = [str(t).strip() for t in tags if str(t).strip()]
+        return cleaned or None
+    if isinstance(tags, str):
+        cleaned = tags.strip()
+        return [cleaned] if cleaned else None
+    return None
+
 from ..deps import DbDep
 from ..auth.model import UserOut
 from .models import VoiceSampleCreate, VoiceSampleUpdate, VoiceSampleOut
@@ -60,7 +72,9 @@ class VoiceSampleService:
             "age": data.age,
             "accent": data.accent,
             "avatar_image_path": data.avatar_image_path,
+            "avatar_preset": data.avatar_preset,
             "category": _normalize_categories(data.category),
+            "tags": _normalize_tags(getattr(data, "tags", None)),
             "is_builtin": data.is_builtin,
         }
 
@@ -171,6 +185,7 @@ class VoiceSampleService:
             search_or = [
                 {"name": {"$regex": q, "$options": "i"}},
                 {"description": {"$regex": q, "$options": "i"}},
+                {"tags": {"$elemMatch": {"$regex": q, "$options": "i"}}},
             ]
             conditions.append({"$or": search_or})
 
@@ -365,8 +380,12 @@ class VoiceSampleService:
             update_data["accent"] = data.accent
         if getattr(data, "avatar_image_path", None) is not None:
             update_data["avatar_image_path"] = data.avatar_image_path
+        if getattr(data, "avatar_preset", None) is not None:
+            update_data["avatar_preset"] = data.avatar_preset
         if data.category is not None:
             update_data["category"] = _normalize_categories(data.category)
+        if getattr(data, "tags", None) is not None:
+            update_data["tags"] = _normalize_tags(data.tags)
         if data.is_builtin is not None:
             update_data["is_builtin"] = data.is_builtin
 
