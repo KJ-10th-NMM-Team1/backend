@@ -78,8 +78,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
                 service = VoiceSampleService(db)
 
                 # 샘플을 직접 DB에서 조회 (owner_id만 필요)
-                from bson import ObjectId
-
                 try:
                     sample_oid = ObjectId(voice_sample_id)
                     sample_doc = await service.collection.find_one({"_id": sample_oid})
@@ -283,8 +281,6 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             )
             if speaker_voices:
                 try:
-                    from bson import ObjectId
-
                     # 기존 default_speaker_voices를 가져와서 병합 (다른 언어 데이터 보존)
                     project_oid = ObjectId(project_id)
                     project_doc = await db["projects"].find_one({"_id": project_oid})

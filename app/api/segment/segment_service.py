@@ -226,7 +226,6 @@ class SegmentService:
 
         # segment_id는 문자열로 저장되어 있으므로 문자열 배열로 만들기
         segment_ids = [str(seg["_id"]) for seg in segments]
-
         translations = await self.translation_collection.find(
             {"segment_id": {"$in": segment_ids}, "language_code": language_code}
         ).to_list(None)
@@ -246,7 +245,9 @@ class SegmentService:
             # translation_data의 값이 있으면 우선, 없으면 project_segments 사용
             merged = {
                 "id": seg["_id"],
-                "translation_id": translation_data.get("_id"),  # segment_translations의 _id
+                "translation_id": translation_data.get(
+                    "_id"
+                ),  # segment_translations의 _id
                 **seg,  # project_segments 데이터 (기본값)
                 **translation_data,  # segment_translations 데이터 (편집값 우선)
                 "language_code": language_code,
