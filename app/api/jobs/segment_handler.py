@@ -68,6 +68,7 @@ async def check_and_create_segments(
     now = datetime.now()
     segment_ids_map = {}  # segment_index -> _id 매핑
     translation_ids_map = {}  # segment_index -> translation_id 매핑
+    segments_created = False  # 세그먼트 생성 여부
 
     # 분산 락으로 project_segments 생성 동기화
     # 첫 번째 타겟 언어가 생성 완료할 때까지 두 번째는 대기
@@ -131,6 +132,7 @@ async def check_and_create_segments(
                         segment_ids_map[segments_to_create[idx]["segment_index"]] = (
                             seg_id
                         )
+                    segments_created = True
                 except Exception as exc:
                     logger.error(f"Failed to create segments: {exc}")
                     return (False, {})
