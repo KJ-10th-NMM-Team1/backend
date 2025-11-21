@@ -43,3 +43,17 @@ async def ensure_db_connection() -> None:
 
 async def get_db() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
     yield database
+
+
+async def ensure_indexes() -> None:
+    """데이터베이스 인덱스 생성"""
+    # project_segments 조회 성능을 위한 일반 인덱스 (유니크 아님)
+    # 중복 방지는 Redis 분산 락으로 처리
+    try:
+        await database["project_segments"].create_index(
+            [("project_id", 1), ("segment_index", 1)],
+            name="project_segment_idx",
+        )
+        print("MongoDB indexes ensured")
+    except Exception as exc:
+        print(f"Index creation warning: {exc}")

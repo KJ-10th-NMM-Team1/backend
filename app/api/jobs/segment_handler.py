@@ -19,7 +19,8 @@ from .job_utils import (
     validate_segment_exists,
     extract_error_message,
 )
-from .event_dispatcher import dispatch_audio_completed
+from ..progress.dispatcher import dispatch_audio_completed
+from app.config.redis import distributed_lock
 
 logger = logging.getLogger(__name__)
 
@@ -64,82 +65,77 @@ async def check_and_create_segments(
     Returns:
         (success, translation_id_map): 성공 여부와 segment_index -> translation_id 매핑
     """
-    segment_service = SegmentService(db)
-
-    # 이미 세그먼트가 있는지 확인
-    try:
-        existing_segments = await segment_service.get_segments_by_project(project_id)
-    except Exception:
-        existing_segments = None
-
     now = datetime.now()
-    segments_created = False
     segment_ids_map = {}  # segment_index -> _id 매핑
     translation_ids_map = {}  # segment_index -> translation_id 매핑
+    segments_created = False  # 세그먼트 생성 여부
 
-    # 기존 세그먼트가 없으면 생성
-    if not existing_segments:
-        segments_to_create = []
+    # 분산 락으로 project_segments 생성 동기화
+    # 첫 번째 타겟 언어가 생성 완료할 때까지 두 번째는 대기
+    async with distributed_lock(f"project_segments:{project_id}"):
+        # 락 획득 후 세그먼트 존재 여부 확인 (직접 DB 쿼리)
+        existing_segments = (
+            await db["project_segments"].find({"project_id": project_id}).to_list(None)
+        )
 
-        for i, seg in enumerate(segments):
-            # 새 포맷 vs 기존 포맷 구분
-            # 새 포맷: {"segment_index": 0, "speaker_tag": "SPEAKER_00", "start": 0.217, "end": 13.426, "source_text": "..."}
-            # 기존 포맷: {"segment_id": ..., "seg_idx": ..., "speaker": ..., "start": ..., "end": ..., "prompt_text": ...}
+        if existing_segments:
+            # 이미 생성됨 - ID 매핑만 생성
+            for seg in existing_segments:
+                segment_ids_map[seg.get("segment_index", 0)] = seg["_id"]
+        else:
+            # 세그먼트 생성
+            segments_to_create = []
 
-            if "speaker_tag" in seg:
-                # 새 포맷 (parse_segments_from_metadata에서 생성된 포맷)
-                segment_data = {
-                    "project_id": project_id,
-                    "speaker_tag": seg.get("speaker_tag", ""),
-                    "start": float(seg.get("start", 0)),
-                    "end": float(seg.get("end", 0)),
-                    "source_text": seg.get("source_text", ""),
-                    "segment_index": seg.get("segment_index", i),
-                    "is_verified": False,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            else:
-                # 기존 포맷 (워커에서 오는 데이터)
-                segment_data = {
-                    "project_id": project_id,
-                    "speaker_tag": seg.get("speaker", ""),
-                    "start": float(seg.get("start", 0)),
-                    "end": float(seg.get("end", 0)),
-                    "source_text": seg.get("source_text", ""),
-                    "is_verified": False,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-
-                # segment_index 추가 (순서 보장)
-                if "seg_idx" in seg:
-                    segment_data["segment_index"] = int(seg["seg_idx"])
-                elif "segment_id" in seg:
-                    try:
-                        segment_data["segment_index"] = int(seg["segment_id"])
-                    except (ValueError, TypeError):
-                        segment_data["segment_index"] = i
+            for i, seg in enumerate(segments):
+                # 새 포맷 vs 기존 포맷 구분
+                if "speaker_tag" in seg:
+                    # 새 포맷 (parse_segments_from_metadata에서 생성된 포맷)
+                    segment_data = {
+                        "project_id": project_id,
+                        "speaker_tag": seg.get("speaker_tag", ""),
+                        "source_text": seg.get("source_text", ""),
+                        "segment_index": seg.get("segment_index", i),
+                        "is_verified": False,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
                 else:
-                    segment_data["segment_index"] = i
+                    # 기존 포맷 (워커에서 오는 데이터)
+                    segment_data = {
+                        "project_id": project_id,
+                        "speaker_tag": seg.get("speaker", ""),
+                        "source_text": seg.get("source_text", ""),
+                        "is_verified": False,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
 
-            segments_to_create.append(segment_data)
+                    # segment_index 추가 (순서 보장)
+                    if "seg_idx" in seg:
+                        segment_data["segment_index"] = int(seg["seg_idx"])
+                    elif "segment_id" in seg:
+                        try:
+                            segment_data["segment_index"] = int(seg["segment_id"])
+                        except (ValueError, TypeError):
+                            segment_data["segment_index"] = i
+                    else:
+                        segment_data["segment_index"] = i
 
-        if segments_to_create:
-            try:
-                result = await db["project_segments"].insert_many(segments_to_create)
-                # 생성된 segment ID 저장
-                for idx, seg_id in enumerate(result.inserted_ids):
-                    segment_ids_map[segments_to_create[idx]["segment_index"]] = seg_id
+                segments_to_create.append(segment_data)
 
-                segments_created = True
-            except Exception as exc:
-                logger.error(f"Failed to create segments: {exc}")
-                return False
-    else:
-        # 기존 세그먼트가 있으면 ID 매핑만 생성
-        for seg in existing_segments:
-            segment_ids_map[seg.get("segment_index", 0)] = seg["_id"]
+            if segments_to_create:
+                try:
+                    result = await db["project_segments"].insert_many(
+                        segments_to_create
+                    )
+                    for idx, seg_id in enumerate(result.inserted_ids):
+                        segment_ids_map[segments_to_create[idx]["segment_index"]] = (
+                            seg_id
+                        )
+                    segments_created = True
+                except Exception as exc:
+                    logger.error(f"Failed to create segments: {exc}")
+                    return (False, {})
 
     # 번역 세그먼트 생성 (타겟 언어별로 생성)
     if segments and target_lang:
@@ -182,11 +178,17 @@ async def check_and_create_segments(
                 translated_text = seg.get("prompt_text", "")
                 audio_url = seg.get("audio_file")  # TTS 오디오 파일 경로
 
+            # start/end는 언어마다 다를 수 있으므로 segment_translations에 저장
+            start_time = float(seg.get("start", 0))
+            end_time = float(seg.get("end", 0))
+
             translation_data = {
                 "segment_id": str(segment_obj_id),
                 "language_code": target_lang,
                 "target_text": translated_text,
                 "segment_audio_url": audio_url,
+                "start": start_time,
+                "end": end_time,
                 "created_at": now,
                 "updated_at": now,
             }

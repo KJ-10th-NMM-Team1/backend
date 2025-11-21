@@ -1,6 +1,7 @@
 """
 Jobs API SSE 이벤트 발송 로직
 """
+
 from datetime import datetime
 from typing import Optional
 from ..deps import DbDep
@@ -43,45 +44,6 @@ async def dispatch_target_update(
         "progress": progress,
         "timestamp": datetime.now().isoformat() + "Z",
     }
-    for queue in list(listeners):
-        await queue.put(event)
-
-
-async def dispatch_audio_completed(
-    project_id: str,
-    language_code: str,
-    segment_id: str,
-    audio_s3_key: Optional[str] = None,
-    audio_duration: Optional[float] = None,
-    status: str = "completed",
-    error_message: Optional[str] = None,
-):
-    """오디오 생성 완료/실패 이벤트를 SSE로 브로드캐스트"""
-    from ..audio.router import audio_channels
-
-    channel_key = f"{project_id}:{language_code}"
-    listeners = audio_channels.get(channel_key, set())
-
-    event_type = "audio-completed" if status == "completed" else "audio-failed"
-    event_data = {
-        "segmentId": segment_id,
-        "projectId": project_id,
-        "languageCode": language_code,
-        "status": status,
-    }
-
-    if audio_s3_key:
-        event_data["audioS3Key"] = audio_s3_key
-    if audio_duration is not None:
-        event_data["audioDuration"] = audio_duration
-    if error_message:
-        event_data["error"] = error_message
-
-    event = {
-        "event": event_type,
-        "data": event_data,
-    }
-
     for queue in list(listeners):
         await queue.put(event)
 
