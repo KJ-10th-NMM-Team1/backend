@@ -25,6 +25,18 @@ def _with_builtin_flag(sample: dict[str, Any]) -> dict[str, Any]:
         sample["is_builtin"] = sample.get("is_default", False)
     return sample
 
+
+def _normalize_tags(tags: Any) -> Optional[list[str]]:
+    if tags is None:
+        return None
+    if isinstance(tags, list):
+        cleaned = [str(t).strip() for t in tags if str(t).strip()]
+        return cleaned or None
+    if isinstance(tags, str):
+        cleaned = tags.strip()
+        return [cleaned] if cleaned else None
+    return None
+
 from ..deps import DbDep
 from ..auth.model import UserOut
 from .models import VoiceSampleCreate, VoiceSampleUpdate, VoiceSampleOut
@@ -60,8 +72,11 @@ class VoiceSampleService:
             "age": data.age,
             "accent": data.accent,
             "avatar_image_path": data.avatar_image_path,
+            "avatar_preset": data.avatar_preset,
             "category": _normalize_categories(data.category),
+            "tags": _normalize_tags(getattr(data, "tags", None)),
             "is_builtin": data.is_builtin,
+            "added_count": 0,
         }
 
         try:
@@ -80,14 +95,19 @@ class VoiceSampleService:
                 )
                 is_in_my_voices = True
                 added_count = 1
+                await self.collection.update_one(
+                    {"_id": sample_oid},
+                    {"$inc": {"added_count": 1}},
+                )
+                sample_data["added_count"] = added_count
             except PyMongoError:
                 # user_voices 추가 실패해도 보이스 생성은 성공으로 처리
                 is_in_my_voices = False
                 added_count = 0
+                sample_data["added_count"] = added_count
 
-            return VoiceSampleOut(
-                **sample_data, is_in_my_voices=is_in_my_voices, added_count=added_count
-            )
+            sample_data["added_count"] = added_count
+            return VoiceSampleOut(**sample_data, is_in_my_voices=is_in_my_voices)
         except PyMongoError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -134,18 +154,14 @@ class VoiceSampleService:
             except Exception:
                 pass
 
-        # 추가 횟수 계산
-        added_count = await self.user_voices_collection.count_documents(
-            {"voice_sample_id": sample_oid}
-        )
-
         sample = _with_builtin_flag(sample)
 
-        return VoiceSampleOut(
+        sample_payload = {
             **sample,
-            is_in_my_voices=is_in_my_voices,
-            added_count=added_count,
-        )
+            "added_count": sample.get("added_count", 0),
+            "is_in_my_voices": is_in_my_voices,
+        }
+        return VoiceSampleOut(**sample_payload)
 
     async def list_voice_samples(
         self,
@@ -155,10 +171,8 @@ class VoiceSampleService:
         my_samples_only: bool = False,
         category: Optional[str] = None,
         is_builtin: Optional[bool] = None,
-        gender: Optional[str] = None,
-        age: Optional[str] = None,
-        accent: Optional[str] = None,
         languages: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None,
         page: int = 1,
         limit: int = 20,
     ) -> Tuple[List[VoiceSampleOut], int]:
@@ -171,6 +185,7 @@ class VoiceSampleService:
             search_or = [
                 {"name": {"$regex": q, "$options": "i"}},
                 {"description": {"$regex": q, "$options": "i"}},
+                {"tags": {"$elemMatch": {"$regex": q, "$options": "i"}}},
             ]
             conditions.append({"$or": search_or})
 
@@ -229,17 +244,9 @@ class VoiceSampleService:
                 }
             )
 
-        # 성별 필터
-        if gender and gender != "any":
-            conditions.append({"gender": gender})
-
-        # 나이대 필터
-        if age and age != "any":
-            conditions.append({"age": age})
-
-        # 억양 필터
-        if accent and accent != "any":
-            conditions.append({"accent": accent})
+        # 태그 필터 (모든 태그 포함)
+        if tags:
+            conditions.append({"tags": {"$all": tags}})
 
         # 언어 필터
         if languages and len(languages) > 0:
@@ -286,34 +293,15 @@ class VoiceSampleService:
         else:
             my_voice_ids = set()
 
-        # 추가 횟수 계산
-        added_counts: dict[str, int] = {}
-        if samples:
-            sample_ids = [sample["_id"] for sample in samples]
-            count_docs = await self.user_voices_collection.aggregate(
-                [
-                    {
-                        "$match": {
-                            "voice_sample_id": {"$in": sample_ids},
-                        }
-                    },
-                    {"$group": {"_id": "$voice_sample_id", "count": {"$sum": 1}}},
-                ]
-            ).to_list(length=None)
-            added_counts = {
-                str(doc["_id"]): int(doc.get("count", 0)) for doc in count_docs
-            }
-
         result = []
         for sample in samples:
             sample = _with_builtin_flag(sample)
-            result.append(
-                VoiceSampleOut(
-                    **sample,
-                    is_in_my_voices=str(sample["_id"]) in my_voice_ids,
-                    added_count=added_counts.get(str(sample["_id"]), 0),
-                )
-            )
+            sample_payload = {
+                **sample,
+                "added_count": sample.get("added_count", 0),
+                "is_in_my_voices": str(sample["_id"]) in my_voice_ids,
+            }
+            result.append(VoiceSampleOut(**sample_payload))
 
         return result, total
 
@@ -365,8 +353,12 @@ class VoiceSampleService:
             update_data["accent"] = data.accent
         if getattr(data, "avatar_image_path", None) is not None:
             update_data["avatar_image_path"] = data.avatar_image_path
+        if getattr(data, "avatar_preset", None) is not None:
+            update_data["avatar_preset"] = data.avatar_preset
         if data.category is not None:
             update_data["category"] = _normalize_categories(data.category)
+        if getattr(data, "tags", None) is not None:
+            update_data["tags"] = _normalize_tags(data.tags)
         if data.is_builtin is not None:
             update_data["is_builtin"] = data.is_builtin
 
@@ -385,15 +377,14 @@ class VoiceSampleService:
                     is_in_my_voices = user_voice is not None
                 except Exception:
                     pass
-            added_count = await self.user_voices_collection.count_documents(
-                {"voice_sample_id": sample_oid}
-            )
+            added_count = sample.get("added_count", 0)
             sample = _with_builtin_flag(sample)
-            return VoiceSampleOut(
+            sample_payload = {
                 **sample,
-                is_in_my_voices=is_in_my_voices,
-                added_count=added_count,
-            )
+                "added_count": added_count,
+                "is_in_my_voices": is_in_my_voices,
+            }
+            return VoiceSampleOut(**sample_payload)
 
         try:
             updated = await self.collection.find_one_and_update(
@@ -420,15 +411,14 @@ class VoiceSampleService:
                     is_in_my_voices = user_voice is not None
                 except Exception:
                     pass
-            added_count = await self.user_voices_collection.count_documents(
-                {"voice_sample_id": sample_oid}
-            )
+            added_count = updated.get("added_count", 0)
             updated = _with_builtin_flag(updated)
-            return VoiceSampleOut(
+            updated_payload = {
                 **updated,
-                is_in_my_voices=is_in_my_voices,
-                added_count=added_count,
-            )
+                "added_count": added_count,
+                "is_in_my_voices": is_in_my_voices,
+            }
+            return VoiceSampleOut(**updated_payload)
         except PyMongoError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -516,6 +506,10 @@ class VoiceSampleService:
                     "created_at": datetime.utcnow(),
                 }
             )
+            await self.collection.update_one(
+                {"_id": sample_oid},
+                {"$inc": {"added_count": 1}},
+            )
         except PyMongoError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -536,6 +530,11 @@ class VoiceSampleService:
             result = await self.user_voices_collection.delete_one(
                 {"user_id": user_oid, "voice_sample_id": sample_oid}
             )
+            if result.deleted_count:
+                await self.collection.update_one(
+                    {"_id": sample_oid},
+                    {"$inc": {"added_count": -1}},
+                )
             # 삭제되지 않아도 에러 없이 처리 (이미 제거된 경우)
         except PyMongoError as exc:
             raise HTTPException(
@@ -581,29 +580,13 @@ class VoiceSampleService:
             length=limit
         )
 
-        # added_count 계산
-        added_counts: dict[str, int] = {}
-        if samples:
-            sample_ids = [sample["_id"] for sample in samples]
-            count_docs = await self.user_voices_collection.aggregate(
-                [
-                    {
-                        "$match": {
-                            "voice_sample_id": {"$in": sample_ids},
-                        }
-                    },
-                    {"$group": {"_id": "$voice_sample_id", "count": {"$sum": 1}}},
-                ]
-            ).to_list(length=None)
-            added_counts = {
-                str(doc["_id"]): int(doc.get("count", 0)) for doc in count_docs
-            }
-
         result = [
             VoiceSampleOut(
-                **sample,
-                is_in_my_voices=True,  # 내 라이브러리이므로 항상 True
-                added_count=added_counts.get(str(sample["_id"]), 0),
+                **{
+                    **sample,
+                    "added_count": sample.get("added_count", 0),
+                    "is_in_my_voices": True,  # 내 라이브러리이므로 항상 True
+                }
             )
             for sample in samples
         ]
