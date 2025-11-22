@@ -15,7 +15,7 @@ async def find_segment_id_from_metadata(
     metadata: dict,
 ) -> Optional[str]:
     """
-    metadata에서 segment_id를 찾습니다.
+    metadata에서 단일 segment_id를 찾습니다. (하위 호환성 유지)
 
     1. metadata.segment_id 우선
     2. metadata.segments[0].index로 project_segments에서 조회
@@ -28,45 +28,73 @@ async def find_segment_id_from_metadata(
     Returns:
         segment_id (str) 또는 None
     """
-    # metadata에서 segment_id 직접 가져오기
+    result = await find_segment_ids_from_metadata(db, project_id, metadata)
+    return result[0] if result else None
+
+
+async def find_segment_ids_from_metadata(
+    db: AsyncIOMotorDatabase,
+    project_id: str,
+    metadata: dict,
+) -> list[str]:
+    """
+    metadata에서 여러 segment_id를 찾습니다.
+
+    1. metadata.segment_id가 있으면 단일 항목 리스트 반환
+    2. metadata.segments 배열의 각 segment_id 또는 index로 조회
+
+    Args:
+        db: Database connection
+        project_id: 프로젝트 ID
+        metadata: 콜백 metadata
+
+    Returns:
+        segment_id 리스트
+    """
+    segment_ids = []
+
+    # metadata에서 segment_id 직접 가져오기 (단일)
     segment_id = metadata.get("segment_id")
-
     if segment_id:
-        return segment_id
+        segment_ids.append(segment_id)
+        return segment_ids
 
-    # segments에서 index로 찾기
+    # segments 배열에서 찾기
     segments_result = metadata.get("segments", [])
     if not segments_result:
-        return None
-
-    seg_result = segments_result[0]
-    segment_index = seg_result.get("index")
-
-    if segment_index is None:
-        return None
+        return segment_ids
 
     try:
         project_oid = (
-            ObjectId(project_id)
-            if isinstance(project_id, str)
-            else project_id
-        )
-        segment_doc = await db["project_segments"].find_one(
-            {
-                "project_id": project_oid,
-                "segment_index": segment_index,
-            }
+            ObjectId(project_id) if isinstance(project_id, str) else project_id
         )
 
-        if segment_doc:
-            return str(segment_doc["_id"])
+        for seg_result in segments_result:
+            # segment_id가 직접 있으면 사용
+            seg_id = seg_result.get("segment_id")
+            if seg_id:
+                segment_ids.append(seg_id)
+                continue
+
+            # index로 찾기
+            segment_index = seg_result.get("index")
+            if segment_index is None:
+                continue
+
+            segment_doc = await db["project_segments"].find_one(
+                {
+                    "project_id": project_oid,
+                    "segment_index": segment_index,
+                }
+            )
+
+            if segment_doc:
+                segment_ids.append(str(segment_doc["_id"]))
 
     except Exception as exc:
-        logger.error(
-            f"Error finding segment by index {segment_index}: {exc}"
-        )
+        logger.error(f"Error finding segments from metadata: {exc}")
 
-    return None
+    return segment_ids
 
 
 async def validate_segment_exists(

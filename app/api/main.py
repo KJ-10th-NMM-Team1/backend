@@ -17,8 +17,10 @@ from .assets.router import assets_router
 from .user.routes import user_router
 from .suggesion.router import suggestion_router
 from .youtube.router import youtube_router
-from .audio.router import audio_router
 from .mux.router import router as mux_router
+from .progress.router import progress_router
+from .accent.router import router as accent_router
+from .credits.router import credits_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -42,5 +44,7 @@ api_router.include_router(target_router)
 api_router.include_router(assets_router)
 api_router.include_router(suggestion_router)
 api_router.include_router(youtube_router)
-api_router.include_router(audio_router)
 api_router.include_router(mux_router)
+api_router.include_router(progress_router)
+api_router.include_router(accent_router)
+api_router.include_router(credits_router)

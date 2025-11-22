@@ -57,7 +57,9 @@ def _serialize_job(doc: dict[str, Any]) -> JobRead:
             "task_payload": doc.get("task_payload"),
             "target_lang": doc.get("target_lang"),  # 타겟 언어 추가
             "source_lang": doc.get("source_lang"),  # 원본 언어 추가
-            "is_replace_voice_samples": doc.get("is_replace_voice_samples"), # 음성샘플 자동 추천 여부
+            "is_replace_voice_samples": doc.get(
+                "is_replace_voice_samples"
+            ),  # 음성샘플 자동 추천 여부
         }
     )
 
@@ -258,7 +260,7 @@ async def create_job(
         "task_payload": payload.task_payload or None,
         "target_lang": payload.target_lang,  # 타겟 언어 저장
         "source_lang": payload.source_lang,  # 원본 언어 저장
-        "is_replace_voice_samples": payload.is_replace_voice_samples,   # 음성샘플 자동 추천 여부
+        "is_replace_voice_samples": payload.is_replace_voice_samples,  # 음성샘플 자동 추천 여부
     }
 
     try:
@@ -761,6 +763,7 @@ async def start_segments_tts_job(
                 "e": seg.get("end"),
                 "start": seg.get("start", 0.0),  # 호환성을 위해 둘 다 포함
                 "end": seg.get("end"),
+                "segment_id": seg.get("segment_id"),
             }
         )
 
@@ -771,7 +774,7 @@ async def start_segments_tts_job(
         "segments": worker_segments,
         "speaker_voices": resolved_speaker_voices,
         "original_job_id": original_job_id,  # full_pipeline job_id 전달
-        "segment_id": segment_id,  # segment_id 추가 (콜백에서 사용)
+        "segment_id": segment_id,  # segment_id 추가 (콜백에서 사용) -> 단일일때만
     }
 
     payload = JobCreate(

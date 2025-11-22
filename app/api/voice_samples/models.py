@@ -22,11 +22,19 @@ class VoiceSampleCreate(BaseModel):
     prompt_text: Optional[str] = Field(None, description="STT로 추출한 프롬프트 텍스트")
     country: Optional[str] = Field(default=None, description="국적(언어 코드)")
     gender: Optional[str] = Field(default=None, description="성별 정보")
+    age: Optional[str] = Field(default=None, description="나이대 (young, middle_aged, old)")
+    accent: Optional[str] = Field(default=None, description="억양 코드")
     avatar_image_path: Optional[str] = Field(
         default=None, description="보이스 아바타 이미지 경로"
     )
-    category: Optional[str] = Field(default=None, description="카테고리")
-    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
+    avatar_preset: Optional[str] = Field(default=None, description="프리셋 아바타 ID")
+    category: Optional[list[str] | str] = Field(
+        default=None, description="카테고리(여러 개 선택 가능)"
+    )
+    tags: Optional[list[str] | str] = Field(default=None, description="자유 태그 목록")
+    is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
+    license_code: Optional[str] = Field(default="commercial", description="라이선스 코드 (cc0, cc-by, cc-by-nc 등)")
+    can_commercial_use: Optional[bool] = Field(default=True, description="상업적 사용 가능 여부")
 
 
 class VoiceSamplePrepareUpload(BaseModel):
@@ -47,9 +55,17 @@ class VoiceSampleFinishUpload(BaseModel):
     object_key: str = Field(..., description="S3에 업로드된 파일의 object_key")
     country: Optional[str] = Field(default=None, description="국적(언어 코드)")
     gender: Optional[str] = Field(default=None, description="성별 정보")
+    age: Optional[str] = Field(default=None, description="나이대")
+    accent: Optional[str] = Field(default=None, description="억양 코드")
     avatar_image_path: Optional[str] = None
-    category: Optional[str] = Field(default=None, description="카테고리")
-    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
+    avatar_preset: Optional[str] = None
+    category: Optional[list[str] | str] = Field(
+        default=None, description="카테고리(여러 개 선택 가능)"
+    )
+    tags: Optional[list[str] | str] = Field(default=None, description="자유 태그 목록")
+    is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
+    license_code: Optional[str] = Field(default="commercial", description="라이선스 코드 (cc0, cc-by, cc-by-nc 등)")
+    can_commercial_use: Optional[bool] = Field(default=True, description="상업적 사용 가능 여부")
 
 
 class VoiceSampleUpdate(BaseModel):
@@ -63,10 +79,16 @@ class VoiceSampleUpdate(BaseModel):
     prompt_text: Optional[str] = None
     country: Optional[str] = None
     gender: Optional[str] = None
+    age: Optional[str] = None
+    accent: Optional[str] = None
     avatar_image_path: Optional[str] = None
     avatar_image_url: Optional[str] = None  # backward compatibility
-    category: Optional[str] = None
-    is_default: Optional[bool] = None
+    avatar_preset: Optional[str] = None
+    category: Optional[list[str] | str] = None
+    tags: Optional[list[str] | str] = None
+    is_builtin: Optional[bool] = None
+    license_code: Optional[str] = None
+    can_commercial_use: Optional[bool] = None
 
 
 class VoiceSampleOut(BaseModel):
@@ -86,10 +108,19 @@ class VoiceSampleOut(BaseModel):
     prompt_text: Optional[str] = None
     country: Optional[str] = None
     gender: Optional[str] = None
+    age: Optional[str] = None
+    accent: Optional[str] = None
     avatar_image_path: Optional[str] = None
     avatar_image_url: Optional[str] = None  # legacy 데이터 호환
-    category: Optional[str] = Field(default=None, description="카테고리")
-    is_default: bool = Field(default=False, description="기본 제공 보이스 여부")
+    avatar_preset: Optional[str] = None
+    category: Optional[list[str] | str] = Field(
+        default=None, description="카테고리(여러 개 선택 가능)"
+    )
+    tags: Optional[list[str] | str] = Field(default=None, description="자유 태그 목록")
+    is_builtin: bool = Field(default=False, description="기본 제공 보이스 여부")
+    license_code: Optional[str] = Field(default=None, description="라이선스 코드")
+    can_commercial_use: Optional[bool] = Field(default=None, description="상업적 사용 가능 여부")
+    is_deletable: bool = Field(default=True, description="삭제 가능 여부")
 
     class Config:
         populate_by_name = True

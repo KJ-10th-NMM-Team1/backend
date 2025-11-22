@@ -248,9 +248,15 @@ async def finish_voice_sample_upload(
         audio_sample_url=None,  # Optional: 미리듣기용 저용량 mp3 URL (없으면 file_path_wav를 storage API로 사용)
         country=payload.country,
         gender=payload.gender,
+        age=payload.age,
+        accent=payload.accent,
         avatar_image_path=payload.avatar_image_path,
+        avatar_preset=payload.avatar_preset,
         category=payload.category,
-        is_default=payload.is_default,
+        tags=payload.tags,
+        is_builtin=payload.is_builtin,
+        license_code=payload.license_code,
+        can_commercial_use=payload.can_commercial_use,
     )
 
     voice_sample = await service.create_voice_sample(data, current_user)
@@ -375,9 +381,9 @@ async def list_voice_samples(
     my_voices_only: bool = Query(False, description="내가 추가한 보이스만 조회"),
     my_samples_only: bool = Query(False, description="내 샘플만 조회"),
     category: Optional[str] = Query(None, description="카테고리 필터"),
-    is_default: Optional[bool] = Query(None, description="기본 보이스 필터"),
-    gender: Optional[str] = Query(None, description="성별 필터"),
+    is_builtin: Optional[bool] = Query(None, description="기본 보이스 필터"),
     languages: Optional[List[str]] = Query(None, description="언어 필터 (배열)"),
+    tags: Optional[List[str]] = Query(None, description="태그 필터 (배열)"),
     page: int = Query(1, ge=1, description="페이지 번호"),
     limit: int = Query(20, ge=1, le=100, description="페이지당 개수"),
     current_user: Optional[UserOut] = Depends(get_current_user_from_cookie),
@@ -390,9 +396,9 @@ async def list_voice_samples(
         my_voices_only=my_voices_only,
         my_samples_only=my_samples_only,
         category=category,
-        is_default=is_default,
-        gender=gender,
+        is_builtin=is_builtin,
         languages=languages,
+        tags=tags,
         page=page,
         limit=limit,
     )

@@ -215,3 +215,31 @@ class SegmentTTSRegenerateResponse(BaseModel):
     project_id: str
     target_lang: str
     mod: str
+
+
+class SegmentTTSItem(BaseModel):
+    """배치 TTS 재생성 시 개별 세그먼트 데이터"""
+
+    segment_id: str
+    translated_text: str
+    start: float
+    end: float
+
+
+class BatchSegmentTTSRegenerateRequest(BaseModel):
+    """여러 세그먼트에 대한 TTS 재생성 요청"""
+
+    segments: list[SegmentTTSItem]
+    target_lang: str
+    mod: str = "fixed"
+    voice_sample_id: Optional[str] = None
+
+
+class BatchSegmentTTSRegenerateResponse(BaseModel):
+    """여러 세그먼트 TTS 재생성 응답"""
+
+    job_ids: list[str]
+    project_id: str
+    target_lang: str
+    mod: str
+    segment_count: int

@@ -6,6 +6,8 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from bson import ObjectId
+
 from ..deps import DbDep
 from ..segment.segment_service import SegmentService
 from ..segment.service import SegmentService as SegmentTranslationService
@@ -16,10 +18,12 @@ from app.utils.s3 import download_metadata_from_s3, parse_segments_from_metadata
 from app.utils.audio import get_audio_duration_from_s3
 from .job_utils import (
     find_segment_id_from_metadata,
+    find_segment_ids_from_metadata,
     validate_segment_exists,
     extract_error_message,
 )
-from .event_dispatcher import dispatch_audio_completed
+from ..progress.dispatcher import dispatch_audio_completed
+from app.config.redis import distributed_lock
 
 logger = logging.getLogger(__name__)
 
@@ -64,82 +68,77 @@ async def check_and_create_segments(
     Returns:
         (success, translation_id_map): 성공 여부와 segment_index -> translation_id 매핑
     """
-    segment_service = SegmentService(db)
-
-    # 이미 세그먼트가 있는지 확인
-    try:
-        existing_segments = await segment_service.get_segments_by_project(project_id)
-    except Exception:
-        existing_segments = None
-
     now = datetime.now()
-    segments_created = False
     segment_ids_map = {}  # segment_index -> _id 매핑
     translation_ids_map = {}  # segment_index -> translation_id 매핑
+    segments_created = False  # 세그먼트 생성 여부
 
-    # 기존 세그먼트가 없으면 생성
-    if not existing_segments:
-        segments_to_create = []
+    # 분산 락으로 project_segments 생성 동기화
+    # 첫 번째 타겟 언어가 생성 완료할 때까지 두 번째는 대기
+    async with distributed_lock(f"project_segments:{project_id}"):
+        # 락 획득 후 세그먼트 존재 여부 확인 (직접 DB 쿼리)
+        existing_segments = (
+            await db["project_segments"].find({"project_id": project_id}).to_list(None)
+        )
 
-        for i, seg in enumerate(segments):
-            # 새 포맷 vs 기존 포맷 구분
-            # 새 포맷: {"segment_index": 0, "speaker_tag": "SPEAKER_00", "start": 0.217, "end": 13.426, "source_text": "..."}
-            # 기존 포맷: {"segment_id": ..., "seg_idx": ..., "speaker": ..., "start": ..., "end": ..., "prompt_text": ...}
+        if existing_segments:
+            # 이미 생성됨 - ID 매핑만 생성
+            for seg in existing_segments:
+                segment_ids_map[seg.get("segment_index", 0)] = seg["_id"]
+        else:
+            # 세그먼트 생성
+            segments_to_create = []
 
-            if "speaker_tag" in seg:
-                # 새 포맷 (parse_segments_from_metadata에서 생성된 포맷)
-                segment_data = {
-                    "project_id": project_id,
-                    "speaker_tag": seg.get("speaker_tag", ""),
-                    "start": float(seg.get("start", 0)),
-                    "end": float(seg.get("end", 0)),
-                    "source_text": seg.get("source_text", ""),
-                    "segment_index": seg.get("segment_index", i),
-                    "is_verified": False,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            else:
-                # 기존 포맷 (워커에서 오는 데이터)
-                segment_data = {
-                    "project_id": project_id,
-                    "speaker_tag": seg.get("speaker", ""),
-                    "start": float(seg.get("start", 0)),
-                    "end": float(seg.get("end", 0)),
-                    "source_text": seg.get("source_text", ""),
-                    "is_verified": False,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-
-                # segment_index 추가 (순서 보장)
-                if "seg_idx" in seg:
-                    segment_data["segment_index"] = int(seg["seg_idx"])
-                elif "segment_id" in seg:
-                    try:
-                        segment_data["segment_index"] = int(seg["segment_id"])
-                    except (ValueError, TypeError):
-                        segment_data["segment_index"] = i
+            for i, seg in enumerate(segments):
+                # 새 포맷 vs 기존 포맷 구분
+                if "speaker_tag" in seg:
+                    # 새 포맷 (parse_segments_from_metadata에서 생성된 포맷)
+                    segment_data = {
+                        "project_id": project_id,
+                        "speaker_tag": seg.get("speaker_tag", ""),
+                        "source_text": seg.get("source_text", ""),
+                        "segment_index": seg.get("segment_index", i),
+                        "is_verified": False,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
                 else:
-                    segment_data["segment_index"] = i
+                    # 기존 포맷 (워커에서 오는 데이터)
+                    segment_data = {
+                        "project_id": project_id,
+                        "speaker_tag": seg.get("speaker", ""),
+                        "source_text": seg.get("source_text", ""),
+                        "is_verified": False,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
 
-            segments_to_create.append(segment_data)
+                    # segment_index 추가 (순서 보장)
+                    if "seg_idx" in seg:
+                        segment_data["segment_index"] = int(seg["seg_idx"])
+                    elif "segment_id" in seg:
+                        try:
+                            segment_data["segment_index"] = int(seg["segment_id"])
+                        except (ValueError, TypeError):
+                            segment_data["segment_index"] = i
+                    else:
+                        segment_data["segment_index"] = i
 
-        if segments_to_create:
-            try:
-                result = await db["project_segments"].insert_many(segments_to_create)
-                # 생성된 segment ID 저장
-                for idx, seg_id in enumerate(result.inserted_ids):
-                    segment_ids_map[segments_to_create[idx]["segment_index"]] = seg_id
+                segments_to_create.append(segment_data)
 
-                segments_created = True
-            except Exception as exc:
-                logger.error(f"Failed to create segments: {exc}")
-                return False
-    else:
-        # 기존 세그먼트가 있으면 ID 매핑만 생성
-        for seg in existing_segments:
-            segment_ids_map[seg.get("segment_index", 0)] = seg["_id"]
+            if segments_to_create:
+                try:
+                    result = await db["project_segments"].insert_many(
+                        segments_to_create
+                    )
+                    for idx, seg_id in enumerate(result.inserted_ids):
+                        segment_ids_map[segments_to_create[idx]["segment_index"]] = (
+                            seg_id
+                        )
+                    segments_created = True
+                except Exception as exc:
+                    logger.error(f"Failed to create segments: {exc}")
+                    return (False, {})
 
     # 번역 세그먼트 생성 (타겟 언어별로 생성)
     if segments and target_lang:
@@ -182,11 +181,17 @@ async def check_and_create_segments(
                 translated_text = seg.get("prompt_text", "")
                 audio_url = seg.get("audio_file")  # TTS 오디오 파일 경로
 
+            # start/end는 언어마다 다를 수 있으므로 segment_translations에 저장
+            start_time = float(seg.get("start", 0))
+            end_time = float(seg.get("end", 0))
+
             translation_data = {
                 "segment_id": str(segment_obj_id),
                 "language_code": target_lang,
                 "target_text": translated_text,
                 "segment_audio_url": audio_url,
+                "start": start_time,
+                "end": end_time,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -416,8 +421,9 @@ async def process_segment_tts_completed(
     language_code: str,
     metadata: dict,
 ) -> None:
-    """세그먼트 TTS 재생성 완료 처리 - 리팩토링된 버전"""
-    if not metadata.get("segments"):
+    """세그먼트 TTS 재생성 완료 처리 - 여러 세그먼트 지원"""
+    segments_result = metadata.get("segments", [])
+    if not segments_result:
         logger.warning(
             f"⚠️ [segment_tts_completed] No segments in metadata for project {project_id}"
         )
@@ -425,35 +431,39 @@ async def process_segment_tts_completed(
 
     try:
         segment_translation_service = SegmentTranslationService(db)
-        segments_result = metadata.get("segments", [])
+        project_oid = ObjectId(project_id) if isinstance(project_id, str) else project_id
 
-        # 유틸리티 함수로 segment_id 찾기
-        segment_id = await find_segment_id_from_metadata(db, project_id, metadata)
-
-        if not segment_id:
-            logger.error(
-                f"❌ [segment_tts_completed] Cannot find segment_id from metadata or segments"
-            )
-            return
-
-        # segment 유효성 검사
-        segment_doc = await validate_segment_exists(db, segment_id)
-        if not segment_doc:
-            return
-
-        logger.info(
-            f"✅ [segment_tts_completed] Found segment: segment_id={segment_id}, "
-            f"segment_index={segment_doc.get('segment_index')}"
-        )
-
-        # segments_result에서 audio_key 가져오기 및 업데이트
+        processed_count = 0
         for seg_result in segments_result:
             audio_key = seg_result.get("audio_key")
-
             if not audio_key:
                 logger.warning(
                     f"⚠️ [segment_tts_completed] No audio_key in segment result: {seg_result}"
                 )
+                continue
+
+            # 각 세그먼트별로 segment_id 찾기
+            segment_id = seg_result.get("segment_id") or metadata.get("segment_id")
+
+            # segment_id가 없으면 index로 찾기
+            if not segment_id:
+                segment_index = seg_result.get("index")
+                if segment_index is not None:
+                    segment_doc = await db["project_segments"].find_one(
+                        {"project_id": project_oid, "segment_index": segment_index}
+                    )
+                    if segment_doc:
+                        segment_id = str(segment_doc["_id"])
+
+            if not segment_id:
+                logger.warning(
+                    f"⚠️ [segment_tts_completed] Cannot find segment_id for: {seg_result}"
+                )
+                continue
+
+            # segment 유효성 검사
+            segment_doc = await validate_segment_exists(db, segment_id)
+            if not segment_doc:
                 continue
 
             logger.info(
@@ -465,72 +475,70 @@ async def process_segment_tts_completed(
                 {"segment_id": segment_id, "language_code": language_code}
             )
 
-            if translation_doc:
-                # segment_audio_url 업데이트
-                translation_id = str(translation_doc["_id"])
-                # audio_key를 URL 형식으로 변환 (필요시)
-                audio_url = (
-                    f"{audio_key}"
-                    if not audio_key.startswith("/")
-                    and not audio_key.startswith("http")
-                    else audio_key
+            if not translation_doc:
+                logger.warning(
+                    f"⚠️ [segment_tts_completed] Translation not found for segment {segment_id}, language {language_code}"
                 )
+                continue
 
-                logger.info(
-                    f"🔄 [segment_tts_completed] Updating translation {translation_id} with audio_url: {audio_url}"
-                )
+            # segment_audio_url 업데이트
+            translation_id = str(translation_doc["_id"])
+            audio_url = (
+                f"{audio_key}"
+                if not audio_key.startswith("/") and not audio_key.startswith("http")
+                else audio_key
+            )
 
-                await segment_translation_service.update_translation(
-                    translation_id=translation_id,
-                    segment_audio_url=audio_url,
-                )
+            logger.info(
+                f"🔄 [segment_tts_completed] Updating translation {translation_id} with audio_url: {audio_url}"
+            )
 
-                # 오디오 duration 구하고 SSE 이벤트 발송
-                try:
+            await segment_translation_service.update_translation(
+                translation_id=translation_id,
+                segment_audio_url=audio_url,
+            )
+
+            # mod 확인 (세그먼트별 mod 우선, 없으면 metadata의 mod 사용)
+            mod = seg_result.get("mod") or metadata.get("mod", "fixed")
+
+            # SSE 이벤트 발송 (각 세그먼트별로 개별 발송)
+            # dynamic일 때만 audio_duration 계산, fixed는 기존 duration 유지
+            try:
+                audio_duration = None
+                if mod == "dynamic":
                     audio_duration = await get_audio_duration_from_s3(audio_key)
                     if audio_duration is not None:
                         logger.info(
-                            f"✅ [segment_tts_completed] Got audio duration: {audio_duration}s for {audio_key}"
-                        )
-                        # SSE 이벤트 발송 (성공)
-                        await dispatch_audio_completed(
-                            project_id=project_id,
-                            language_code=language_code,
-                            segment_id=segment_id,
-                            audio_s3_key=audio_key,
-                            audio_duration=audio_duration,
-                            status="completed",
+                            f"✅ [segment_tts_completed] Got audio duration: {audio_duration}s for {audio_key} (dynamic)"
                         )
                     else:
                         logger.warning(
                             f"⚠️ [segment_tts_completed] Failed to get audio duration for {audio_key}"
                         )
-                except Exception as duration_exc:
-                    logger.error(
-                        f"❌ [segment_tts_completed] Error getting audio duration: {duration_exc}",
-                        exc_info=True,
-                    )
 
-            else:
-                logger.warning(
-                    f"⚠️ [segment_tts_completed] Translation not found for segment {segment_id}, language {language_code}"
+                await dispatch_audio_completed(
+                    project_id=project_id,
+                    language_code=language_code,
+                    segment_id=segment_id,
+                    audio_s3_key=audio_key,
+                    audio_duration=audio_duration,  # dynamic: 실제 값, fixed: None
+                    status="completed",
                 )
-                # 디버깅: 해당 segment_id로 모든 번역 조회
-                all_translations = (
-                    await db["segment_translations"]
-                    .find({"segment_id": segment_id})
-                    .to_list(None)
-                )
-                logger.info(
-                    f"🔍 [segment_tts_completed] All translations for segment {segment_id}: {all_translations}"
+            except Exception as exc:
+                logger.error(
+                    f"❌ [segment_tts_completed] Error dispatching audio completed: {exc}",
+                    exc_info=True,
                 )
 
-            # 첫 번째 audio_key만 처리 (단일 세그먼트이므로)
-            break
+            processed_count += 1
+
+        logger.info(
+            f"✅ [segment_tts_completed] Processed {processed_count}/{len(segments_result)} segments for project {project_id}"
+        )
 
     except Exception as exc:
         logger.error(
-            f"❌ [segment_tts_completed] Failed to update segment_audio_url for project {project_id}: {exc}",
+            f"❌ [segment_tts_completed] Failed to process segments for project {project_id}: {exc}",
             exc_info=True,
         )
 
