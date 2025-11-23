@@ -65,7 +65,7 @@ def _serialize_job(doc: dict[str, Any]) -> JobRead:
 
 
 def _build_job_message(job: JobRead) -> dict[str, Any]:
-    task = job.task or "full_pipeline"
+    task = job.task or "split_up"
     message: dict[str, Any] = {
         "task": task,
         "job_id": job.job_id,
@@ -256,7 +256,7 @@ async def create_job(
                 "message": "job created",
             }
         ],
-        "task": payload.task or "full_pipeline",
+        "task": payload.task or "split_up",
         "task_payload": payload.task_payload or None,
         "target_lang": payload.target_lang,  # 타겟 언어 저장
         "source_lang": payload.source_lang,  # 원본 언어 저장
@@ -426,7 +426,7 @@ async def enqueue_job(job: JobRead, voice_config: Optional[dict] = None) -> None
             "job_id": {"StringValue": job.job_id, "DataType": "String"},
             "project_id": {"StringValue": job.project_id, "DataType": "String"},
             "task": {
-                "StringValue": (job.task or "full_pipeline"),
+                "StringValue": (job.task or "split_up"),
                 "DataType": "String",
             },
         },
@@ -618,6 +618,7 @@ async def find_full_pipeline_job(
         "target_lang": target_lang,
         "$or": [
             {"task": "full_pipeline"},
+            {"task": "split_up"},
             {"task": None},
             {"task": {"$exists": False}},
         ],
