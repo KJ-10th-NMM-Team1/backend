@@ -5,6 +5,8 @@ from bson.errors import InvalidId
 from pymongo.errors import PyMongoError
 from typing import Optional, List, Tuple, Any
 
+from app.config.s3 import drop_voice_sample, drop_voice_sample_keys
+
 
 def _normalize_categories(category: Any) -> Optional[list[str]]:
     """카테고리를 배열 형태로 정규화"""
@@ -458,13 +460,15 @@ class VoiceSampleService:
                 detail="You can only delete your own voice samples",
             )
 
-        if not sample.get("is_deletable", True):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="This voice sample cannot be deleted after being shared publicly.",
-            )
-
         try:
+            # S3 오브젝트 제거: 파일 경로 기반으로 정확히 삭제, 없으면 prefix 삭제
+            file_keys = []
+            for key_field in ("file_path_wav", "processed_file_path_wav"):
+                key_value = sample.get(key_field)
+                if key_value:
+                    file_keys.append(key_value)
+            drop_voice_sample(user_id=owner.id, sample_id=sample_id, file_keys=file_keys or None)
+
             # 샘플 삭제
             result = await self.collection.delete_one({"_id": sample_oid})
             if result.deleted_count == 0:
