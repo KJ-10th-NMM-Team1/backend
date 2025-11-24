@@ -39,6 +39,7 @@ def _normalize_tags(tags: Any) -> Optional[list[str]]:
         return [cleaned] if cleaned else None
     return None
 
+
 from ..deps import DbDep
 from ..auth.model import UserOut
 from .models import VoiceSampleCreate, VoiceSampleUpdate, VoiceSampleOut
@@ -81,7 +82,9 @@ class VoiceSampleService:
             "added_count": 0,
             "license_code": getattr(data, "license_code", None) or "commercial",
             "can_commercial_use": (
-                data.can_commercial_use if getattr(data, "can_commercial_use", None) is not None else True
+                data.can_commercial_use
+                if getattr(data, "can_commercial_use", None) is not None
+                else True
             ),
             "is_deletable": not data.is_public,
         }
@@ -196,23 +199,8 @@ class VoiceSampleService:
             ]
             conditions.append({"$or": search_or})
 
-        # 내 샘플만 필터
-        if my_samples_only:
-            if not current_user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required",
-                )
-            try:
-                owner_oid = ObjectId(current_user.id)
-                conditions.append({"owner_id": owner_oid})
-            except InvalidId:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id"
-                )
-
-        # 내가 추가한 보이스만 필터
-        if my_voices_only:
+        # 내 샘플 또는 내가 추가한 보이스 필터 (OR 조건)
+        if my_samples_only or my_voices_only:
             if not current_user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -220,17 +208,34 @@ class VoiceSampleService:
                 )
             try:
                 user_oid = ObjectId(current_user.id)
-                user_voices = await self.user_voices_collection.find(
-                    {"user_id": user_oid}
-                ).to_list(length=None)
-                voice_sample_ids = [
-                    uv["voice_sample_id"]
-                    for uv in user_voices
-                    if "voice_sample_id" in uv
-                ]
-                if not voice_sample_ids:
+                or_conditions = []
+
+                # 내 샘플 조건
+                if my_samples_only:
+                    or_conditions.append({"owner_id": user_oid})
+
+                # 내가 추가한 보이스 조건
+                if my_voices_only:
+                    user_voices = await self.user_voices_collection.find(
+                        {"user_id": user_oid}
+                    ).to_list(length=None)
+                    voice_sample_ids = [
+                        uv["voice_sample_id"]
+                        for uv in user_voices
+                        if "voice_sample_id" in uv
+                    ]
+                    if voice_sample_ids:
+                        or_conditions.append({"_id": {"$in": voice_sample_ids}})
+
+                # OR 조건 추가
+                if or_conditions:
+                    if len(or_conditions) == 1:
+                        conditions.append(or_conditions[0])
+                    else:
+                        conditions.append({"$or": or_conditions})
+                elif my_voices_only and not my_samples_only:
+                    # my_voices_only만 true이고 추가한 보이스가 없으면 빈 결과 반환
                     return [], 0
-                conditions.append({"_id": {"$in": voice_sample_ids}})
             except InvalidId:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id"
@@ -467,7 +472,9 @@ class VoiceSampleService:
                 key_value = sample.get(key_field)
                 if key_value:
                     file_keys.append(key_value)
-            drop_voice_sample(user_id=owner.id, sample_id=sample_id, file_keys=file_keys or None)
+            drop_voice_sample(
+                user_id=owner.id, sample_id=sample_id, file_keys=file_keys or None
+            )
 
             # 샘플 삭제
             result = await self.collection.delete_one({"_id": sample_oid})

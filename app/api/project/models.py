@@ -72,8 +72,8 @@ class ProjectUpdate(BaseModel):
     source_language: Optional[str] = None
     title: Optional[str] = None
     duration_seconds: Optional[int] = None
-    default_speaker_voices: Optional[Dict[str, Dict[str, Dict[str, str]]]] = (
-        None  # {target_lang: {speaker: {ref_wav_key, prompt_text}}}
+    speaker_voices: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = (
+        None  # {target_lang: {speaker: {default_voice: {ref_wav_key, prompt_text}, replace_voice: {voice_sample_id, similarity, sample_key}}}}
     )
     tags: Optional[List[str]] = None
 
@@ -131,6 +131,7 @@ class EditorPlaybackState(BaseModel):
 
 class IssueOut(BaseModel):
     """이슈 정보"""
+
     id: PyObjectId = Field(validation_alias="_id")
     issue_type: str
     severity: str
@@ -142,7 +143,9 @@ class IssueOut(BaseModel):
 
 class SegmentTranslationResponse(BaseModel):
     id: PyObjectId
-    translation_id: Optional[PyObjectId] = Field(default=None, description="segment_translations의 _id")
+    translation_id: Optional[PyObjectId] = Field(
+        default=None, description="segment_translations의 _id"
+    )
     project_id: PyObjectId
     language_code: str
     speaker_tag: str | None = None
@@ -152,7 +155,13 @@ class SegmentTranslationResponse(BaseModel):
     target_text: str | None = None
     segment_audio_url: str | None = None
     playback_rate: float = Field(default=1.0, description="재생 속도")
-    issues: List["IssueOut"] = Field(default_factory=list, description="세그먼트 이슈 목록")
+    issues: List["IssueOut"] = Field(
+        default_factory=list, description="세그먼트 이슈 목록"
+    )
+    voice_replacement: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="추천된 보이스 정보 (voice_sample_id, similarity, sample_key 등)",
+    )
 
     @field_validator("start", "end", mode="before")
     @classmethod
@@ -204,7 +213,7 @@ class SegmentTTSRegenerateRequest(BaseModel):
     target_lang: str
     mod: str = "fixed"  # "fixed" or "dynamic"
     voice_sample_id: Optional[str] = (
-        None  # voice_sample의 ID (있으면 해당 voice_sample 사용, 없으면 default_speaker_voices 사용)
+        None  # voice_sample의 ID (있으면 해당 voice_sample 사용, 없으면 speaker_voices 사용)
     )
 
 

@@ -669,12 +669,15 @@ async def start_segments_tts_job(
     job_oid = ObjectId()
     callback_url = f"{callback_base.rstrip('/')}/api/jobs/{job_oid}/status"
 
-    # voice_sample_id 또는 default_speaker_voices에서 speaker_voices 매핑
+    # voice_sample_id 또는 speaker_voices에서 speaker_voices 매핑
     resolved_speaker_voices = None
     aws_s3_bucket = os.getenv("AWS_S3_BUCKET")
 
-    # 1. voice_sample_id가 있으면 해당 voice_sample 사용
-    if voice_sample_id:
+    # 'clone'은 기본 음성(원본 음성)을 의미하므로 speaker_voices의 default_voice를 사용
+    use_default_voice = voice_sample_id == "clone"
+
+    # 1. voice_sample_id가 있고 'clone'이 아니면 해당 voice_sample 사용
+    if voice_sample_id and not use_default_voice:
         try:
             from ..voice_samples.service import VoiceSampleService
 
@@ -698,15 +701,15 @@ async def start_segments_tts_job(
                 resolved_speaker_voices["text_prompt_value"] = voice_sample.prompt_text
         except Exception as exc:
             logger.warning(
-                f"Failed to load voice_sample {voice_sample_id}: {exc}. Falling back to default_speaker_voices."
+                f"Failed to load voice_sample {voice_sample_id}: {exc}. Falling back to speaker_voices."
             )
 
-    # 2. voice_sample_id가 없거나 로드 실패 시 default_speaker_voices 사용
+    # 2. voice_sample_id가 없거나 로드 실패 시 speaker_voices 사용
     if not resolved_speaker_voices:
-        default_speaker_voices = project_doc.get("default_speaker_voices", {})
+        speaker_voices = project_doc.get("speaker_voices", {})
 
-        if target_lang in default_speaker_voices:
-            lang_voices = default_speaker_voices[target_lang]
+        if target_lang in speaker_voices:
+            lang_voices = speaker_voices[target_lang]
 
             if lang_voices:
                 # segment_id가 있으면 해당 segment의 speaker_tag로 스피커 찾기
@@ -723,35 +726,54 @@ async def start_segments_tts_job(
                         pass
 
                 # speaker_key가 있으면 해당 스피커 사용, 없으면 첫 번째 스피커 사용
+                selected_speaker_info = None
                 if speaker_key and speaker_key in lang_voices:
-                    selected_speaker = lang_voices[speaker_key]
+                    selected_speaker_info = lang_voices[speaker_key]
                 else:
-                    selected_speaker = next(iter(lang_voices.values()))
+                    selected_speaker_info = next(iter(lang_voices.values()))
 
-                if (
-                    isinstance(selected_speaker, dict)
-                    and "ref_wav_key" in selected_speaker
-                ):
-                    resolved_speaker_voices = {
-                        "key": selected_speaker["ref_wav_key"],
-                    }
-                    if aws_s3_bucket:
-                        resolved_speaker_voices["bucket"] = aws_s3_bucket
-                    if "prompt_text" in selected_speaker:
-                        resolved_speaker_voices["text_prompt_value"] = selected_speaker[
-                            "prompt_text"
-                        ]
+                if isinstance(selected_speaker_info, dict):
+                    # 'clone'인 경우 default_voice만 사용, 그 외에는 replace_voice 우선 사용
+                    voice_info = None
+                    if (
+                        not use_default_voice
+                        and "replace_voice" in selected_speaker_info
+                    ):
+                        replace_voice = selected_speaker_info["replace_voice"]
+                        if (
+                            isinstance(replace_voice, dict)
+                            and "sample_key" in replace_voice
+                        ):
+                            voice_info = replace_voice
+
+                    if not voice_info and "default_voice" in selected_speaker_info:
+                        voice_info = selected_speaker_info["default_voice"]
+
+                    if (
+                        voice_info
+                        and isinstance(voice_info, dict)
+                        and "ref_wav_key" in voice_info
+                    ):
+                        resolved_speaker_voices = {
+                            "key": voice_info["ref_wav_key"],
+                        }
+                        if aws_s3_bucket:
+                            resolved_speaker_voices["bucket"] = aws_s3_bucket
+                        if "prompt_text" in voice_info:
+                            resolved_speaker_voices["text_prompt_value"] = voice_info[
+                                "prompt_text"
+                            ]
 
     if not resolved_speaker_voices or not resolved_speaker_voices.get("key"):
         logger.error(
             f"❌ [start_segments_tts_job] speaker_voices.key is missing. "
             f"project_id={project_id}, target_lang={target_lang}, "
             f"voice_sample_id={voice_sample_id}, "
-            f"default_speaker_voices={project_doc.get('default_speaker_voices', {})}"
+            f"speaker_voices={project_doc.get('speaker_voices', {})}"
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="speaker_voices.key is required. Either provide voice_sample_id or ensure default_speaker_voices is set for the target language.",
+            detail="speaker_voices.key is required. Either provide voice_sample_id or ensure speaker_voices is set for the target language.",
         )
 
     # segments 형식 변환: { translated_text, start, end } -> { text, s, e }

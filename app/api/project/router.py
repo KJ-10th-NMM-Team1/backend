@@ -280,7 +280,7 @@ async def regenerate_segment_tts(
     - **end**: 세그먼트 종료 시간 (초)
     - **target_lang**: 타겟 언어 코드
     - **mod**: "fixed" (고정 길이) 또는 "dynamic" (동적 길이)
-    - **voice_sample_id**: voice_sample ID (선택사항, 있으면 해당 voice_sample 사용, 없으면 프로젝트의 default_speaker_voices 사용)
+    - **voice_sample_id**: voice_sample ID (선택사항, 있으면 해당 voice_sample 사용, 없으면 프로젝트의 speaker_voices 사용)
     """
     import logging
 
