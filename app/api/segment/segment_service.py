@@ -235,6 +235,28 @@ class SegmentService:
         # translation_map의 키도 문자열로
         translation_map = {doc["segment_id"]: doc for doc in translations}
 
+        # 프로젝트에서 speaker_voices 가져오기
+        project = await self.collection.find_one(
+            {"_id": ObjectId(project_id)}, {"speaker_voices": 1}
+        )
+
+        # voice_replacement 정보를 speaker_tag별로 매핑
+        voice_replacements_by_speaker = {}
+        if project and project.get("speaker_voices"):
+            speaker_voices = project["speaker_voices"].get(language_code, {})
+            for speaker_tag, voice_info in speaker_voices.items():
+                if isinstance(voice_info, dict) and "replace_voice" in voice_info:
+                    replace_voice = voice_info["replace_voice"]
+                    if (
+                        isinstance(replace_voice, dict)
+                        and "voice_sample_id" in replace_voice
+                    ):
+                        voice_replacements_by_speaker[speaker_tag] = {
+                            "voice_sample_id": replace_voice["voice_sample_id"],
+                            "similarity": replace_voice.get("similarity"),
+                            "sample_key": replace_voice.get("sample_key"),
+                        }
+
         result = []
         for seg in segments:
             segment_id_str = str(seg["_id"])  # 문자열로 변환
@@ -256,6 +278,12 @@ class SegmentService:
                 **translation_data,  # segment_translations 데이터 (편집값 우선)
                 "language_code": language_code,
             }
+
+            # voice_replacement 정보 추가
+            speaker_tag = seg.get("speaker_tag")
+            if speaker_tag and speaker_tag in voice_replacements_by_speaker:
+                merged["voice_replacement"] = voice_replacements_by_speaker[speaker_tag]
+
             result.append(SegmentTranslationResponse(**merged))
 
         return result

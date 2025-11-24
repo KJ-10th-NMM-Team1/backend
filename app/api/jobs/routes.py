@@ -13,6 +13,7 @@ from ..voice_samples.models import VoiceSampleUpdate
 from ..project.models import ProjectTargetUpdate, ProjectTargetStatus, ProjectUpdate
 from ..project.service import ProjectService
 from app.utils.project_utils import extract_language_code
+from app.utils.speaker_voices import build_speaker_voices_dict
 
 
 # 새로운 진행도 이벤트 시스템
@@ -235,25 +236,47 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             status=ProjectTargetStatus.PROCESSING, progress=36
         )
     elif stage == "tts_completed":  # TTS 완료
-        # speaker_voices를 default_speaker_voices 형식으로 변환하여 프로젝트에 저장
-        if metadata and metadata.get("speaker_voices") and language_code:
+        # speaker_voices를 새로운 구조로 변환하여 프로젝트에 저장
+        if metadata and language_code:
             try:
-                speaker_voices = metadata.get("speaker_voices", {})
-                # 형식 변환: {speaker: {ref_wav_key, prompt_text}} -> {target_lang: {speaker: {ref_wav_key, prompt_text}}}
-                default_speaker_voices = {language_code: speaker_voices}
+                speakers_list = metadata.get("speakers", [])
+                speaker_refs = metadata.get("speaker_refs")
+                voice_replacements = None  # tts_completed에서는 voice_replacements가 metadata에 직접 포함되지 않을 수 있음
 
-                await project_service.update_project(
-                    ProjectUpdate(
-                        project_id=project_id,
-                        default_speaker_voices=default_speaker_voices,
+                # 유틸 함수를 사용하여 speaker_voices_dict 생성
+                speaker_voices_dict = build_speaker_voices_dict(
+                    speakers_list=speakers_list,
+                    speaker_refs=speaker_refs,
+                    voice_replacements=voice_replacements,
+                )
+
+                if speaker_voices_dict:
+                    # 기존 speaker_voices 가져오기
+                    project_oid = ObjectId(project_id)
+                    project_doc = await db["projects"].find_one({"_id": project_oid})
+                    existing_speaker_voices = (
+                        project_doc.get("speaker_voices", {}) if project_doc else {}
                     )
-                )
-                logger.info(
-                    f"Updated project {project_id} with default_speaker_voices for language {language_code}"
-                )
+
+                    # 새로운 언어 데이터 추가 (기존 데이터 유지)
+                    updated_speaker_voices = {
+                        **existing_speaker_voices,
+                        language_code: speaker_voices_dict,
+                    }
+
+                    await project_service.update_project(
+                        ProjectUpdate(
+                            project_id=project_id,
+                            speaker_voices=updated_speaker_voices,
+                        )
+                    )
+                    logger.info(
+                        f"Updated project {project_id} with speaker_voices for language {language_code}"
+                    )
             except Exception as exc:
                 logger.error(
-                    f"Failed to update default_speaker_voices for project {project_id}: {exc}"
+                    f"Failed to update speaker_voices for project {project_id}: {exc}",
+                    exc_info=True,
                 )
 
         target_update = ProjectTargetUpdate(
@@ -274,46 +297,49 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
             progress=86,  # 비디오 처리 시작 시 86%
         )
     elif stage == "done":  # 비디오 처리 완료
-        # speaker_refs 또는 speaker_voices가 있으면 저장 (tts_completed를 건너뛴 경우 대비)
+        # speaker_refs 또는 speakers가 있으면 저장 (tts_completed를 건너뛴 경우 대비)
         if metadata and language_code:
-            speaker_voices = metadata.get("speaker_voices") or metadata.get(
-                "speaker_refs"
-            )
-            if speaker_voices:
+            speakers_list = metadata.get("speakers") or []
+            speaker_refs = metadata.get("speaker_refs") or {}
+            # voice_replacements는 speakers_list에 이미 포함되어 있을 수 있음
+            # 또는 별도로 전달될 수도 있음 (현재는 speakers_list에 포함된 것으로 가정)
+
+            # speakers 또는 speaker_refs에서 정보 추출
+            if speakers_list or speaker_refs:
                 try:
-                    # 기존 default_speaker_voices를 가져와서 병합 (다른 언어 데이터 보존)
-                    project_oid = ObjectId(project_id)
-                    project_doc = await db["projects"].find_one({"_id": project_oid})
-                    existing_default_speaker_voices = (
-                        project_doc.get("default_speaker_voices", {})
-                        if project_doc
-                        else {}
+                    # 유틸 함수를 사용하여 speaker_voices_dict 생성
+                    speaker_voices_dict = build_speaker_voices_dict(
+                        speakers_list=speakers_list,
+                        speaker_refs=speaker_refs,
+                        voice_replacements=None,  # speakers_list에 이미 포함되어 있음
                     )
 
-                    # 새로운 언어 데이터 추가 (기존 데이터 유지)
-                    updated_default_speaker_voices = {
-                        **existing_default_speaker_voices,
-                        language_code: speaker_voices,
-                    }
-
-                    await project_service.update_project(
-                        ProjectUpdate(
-                            project_id=project_id,
-                            default_speaker_voices=updated_default_speaker_voices,
+                    if speaker_voices_dict:
+                        # 기존 speaker_voices 가져오기
+                        project_oid = ObjectId(project_id)
+                        project_doc = await db["projects"].find_one(
+                            {"_id": project_oid}
                         )
-                    )
+                        existing_speaker_voices = (
+                            project_doc.get("speaker_voices", {}) if project_doc else {}
+                        )
 
-                    # 저장 확인: 업데이트 후 다시 조회하여 확인
-                    verify_doc = await db["projects"].find_one({"_id": project_oid})
-                    saved_voices = (
-                        verify_doc.get("default_speaker_voices", {})
-                        if verify_doc
-                        else {}
-                    )
+                        # 새로운 언어 데이터 추가 (기존 데이터 유지)
+                        updated_speaker_voices = {
+                            **existing_speaker_voices,
+                            language_code: speaker_voices_dict,
+                        }
+
+                        await project_service.update_project(
+                            ProjectUpdate(
+                                project_id=project_id,
+                                speaker_voices=updated_speaker_voices,
+                            )
+                        )
 
                 except Exception as exc:
                     logger.error(
-                        f"❌ [done] Failed to update default_speaker_voices for project {project_id}: {exc}",
+                        f"❌ [done] Failed to update speaker_voices for project {project_id}: {exc}",
                         exc_info=True,
                     )
 
