@@ -59,7 +59,9 @@ async def pipeline_events(project_id: str, request: Request):
             while True:
                 # 클라이언트 연결 해제 확인
                 if await request.is_disconnected():
-                    logger.info(f"Client disconnected from /events for project {project_id}")
+                    logger.info(
+                        f"Client disconnected from /events for project {project_id}"
+                    )
                     break
 
                 try:
@@ -71,7 +73,12 @@ async def pipeline_events(project_id: str, request: Request):
                     # 타임아웃 시 하트비트 전송 (연결 유지 확인)
                     last_heartbeat += 5
                     if last_heartbeat >= heartbeat_interval:
-                        yield {"event": "heartbeat", "data": json.dumps({"timestamp": datetime.now().isoformat()})}
+                        yield {
+                            "event": "heartbeat",
+                            "data": json.dumps(
+                                {"timestamp": datetime.now().isoformat()}
+                            ),
+                        }
                         last_heartbeat = 0
 
         except asyncio.CancelledError:

@@ -56,7 +56,11 @@ voice_samples_router = APIRouter(prefix="/voice-samples", tags=["Voice Samples"]
 AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
 AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
 
-SERVICE_INTRO_SCRIPT = "안녕하세요. AI 음성 합성 서비스를 소개합니다. 이 서비스를 통해 여러분의 목소리로 다양한 콘텐츠를 제작할 수 있습니다."
+SERVICE_INTRO_SCRIPT = {
+    "ko": "안녕하세요. AI 음성 합성 서비스를 소개합니다. 이 서비스를 통해 여러분의 목소리로 다양한 콘텐츠를 제작할 수 있습니다.",
+    "en": "Hello. We would like to introduce our AI voice synthesis service. With this service, you can create various types of content using your own voice.",
+    "jp": "「こんにちは。AI音声合成サービスをご紹介します。このサービスを利用すると、ご自身の声でさまざまなコンテンツを制作することができます。」",
+}
 
 
 @voice_samples_router.post(
@@ -275,8 +279,8 @@ async def finish_voice_sample_upload(
             task="test_synthesis",
             task_payload={
                 "file_path": payload.object_key,
-                "text": SERVICE_INTRO_SCRIPT,
-                "target_lang": "ko",
+                "text": SERVICE_INTRO_SCRIPT[payload.country],
+                "target_lang": payload.country,
                 "voice_sample_id": str(voice_sample.sample_id),
             },
         )
@@ -327,7 +331,9 @@ async def prepare_voice_sample_avatar_upload(
             Bucket=AWS_S3_BUCKET,
             Key=object_key,
             Fields={"Content-Type": payload.content_type},
-            Conditions=[["starts-with", "$Content-Type", payload.content_type.split("/")[0]]],
+            Conditions=[
+                ["starts-with", "$Content-Type", payload.content_type.split("/")[0]]
+            ],
             ExpiresIn=300,
         )
     except Exception as exc:
