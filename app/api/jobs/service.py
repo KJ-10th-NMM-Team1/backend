@@ -475,6 +475,7 @@ async def start_jobs_for_targets(
             callback_url=callback_url,
             target_lang=target_lang,  # 타겟 언어 추가
             source_lang=project.source_language,  # 원본 언어 추가
+            is_replace_voice_samples=project.is_replace_voice_samples,  # 음성샘플 자동 추천 여부 전달
         )
 
         try:
@@ -526,6 +527,7 @@ async def start_job(project: ProjectPublic, db: DbDep):
         callback_url=callback_url,
         task_payload=task_payload if task_payload else None,
         source_lang=project.source_language,  # 원본 언어 추가
+        is_replace_voice_samples=project.is_replace_voice_samples,  # 음성샘플 자동 추천 여부 전달
     )
     job = await create_job(db, job_payload, job_oid=job_oid)
 
