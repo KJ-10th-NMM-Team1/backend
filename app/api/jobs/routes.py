@@ -367,6 +367,19 @@ async def set_job_status(job_id: str, payload: JobUpdateStatus, db: DbDep) -> Jo
         try:
             # language_code가 있으면 해당 언어만 업데이트
             if language_code:
+                # 현재 target 상태 확인 - 이미 COMPLETED면 업데이트 건너뛰기
+                current_targets = await project_service.get_targets_by_project(
+                    project_id, language_code
+                )
+                if current_targets and len(current_targets) > 0:
+                    current_target = current_targets[0]
+                    if current_target.status == ProjectTargetStatus.COMPLETED:
+                        logger.info(
+                            f"Skipping target update for project {project_id}, "
+                            f"language {language_code}: already COMPLETED (incoming stage: {stage})"
+                        )
+                        return result
+
                 await project_service.update_targets_by_project_and_language(
                     project_id, language_code, target_update
                 )
